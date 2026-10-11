@@ -18,7 +18,7 @@ export const WORKSPACE_AUTH_METHODS = "WORKSPACE_AUTH_METHODS";
 export type WorkspaceAuthMethod = "session" | "apiKey";
 
 export type WorkspaceAuthContext =
-  | { method: "session"; workspaceId: string; userId: string }
+  | { method: "session"; workspaceId: string; userId: string; role: string }
   | { method: "apiKey"; workspaceId: string; apiKeyId: string };
 
 type WorkspaceRequest = {
@@ -91,7 +91,7 @@ export class WorkspaceAuthGuard implements CanActivate {
     }
 
     const membership = await this.db.query.workspaceMembers.findFirst({
-      columns: { id: true },
+      columns: { id: true, role: true },
       where: (member, { and, eq }) =>
         and(
           eq(member.workspaceId, workspaceId),
@@ -100,7 +100,12 @@ export class WorkspaceAuthGuard implements CanActivate {
     });
 
     return membership
-      ? { method: "session", workspaceId, userId: session.user.id }
+      ? {
+          method: "session",
+          workspaceId,
+          userId: session.user.id,
+          role: membership.role,
+        }
       : null;
   }
 }

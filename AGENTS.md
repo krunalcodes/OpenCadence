@@ -67,7 +67,8 @@ Decided. Use these; do not introduce alternatives without asking.
 | Typeface | Inter variable, self-hosted |
 | Data fetching and server state | TanStack Query |
 | Data tables | TanStack Table (React Table) |
-| AI features | Vercel AI SDK |
+| AI features | Vercel AI SDK through `@ai-sdk/openai-compatible`; each workspace adds its own endpoint, model, and key in settings |
+| Email editor | `@react-email/editor` (one editor for rich text and layout); templates store its document plus exported HTML and text |
 | Sending integrations | Resend and Amazon SES first; then Gmail, Outlook, IMAP/SMTP mailboxes and SendGrid-style providers, all behind the adapter interface |
 | Authentication | Better Auth (`@workspace/auth`), served by the API at `/api/auth` and proxied by Next; email and password, Google, and the organization (workspaces), two-factor, API key (workspace-owned), Have I Been Pwned and last login method plugins |
 | System email | React Email with Tailwind (`@workspace/email`); Resend and console providers |
@@ -75,8 +76,8 @@ Decided. Use these; do not introduce alternatives without asking.
 | API configuration | `@nestjs/config`, one root `.env` |
 | Tooling | Turborepo, Bun, TypeScript, Biome |
 
-Not decided yet, so ask before picking: the i18n library, the email
-builder/editor, and deployment packaging.
+Not decided yet, so ask before picking: the i18n library and deployment
+packaging.
 
 The owner makes every technical decision. Before choosing a library, a
 driver, a package layout, a schema convention, or anything else with more
@@ -101,6 +102,8 @@ Turborepo monorepo on Bun workspaces (Bun 1.3+, Node 24+).
 - `packages/db`: Drizzle schema, client, and migrations (`@workspace/db`)
 - `packages/auth`: Better Auth server factory and client (`@workspace/auth`)
 - `packages/email`: system email templates and providers (`@workspace/email`)
+- `packages/email-renderer`: merge tags for user email content
+  (`@workspace/email-renderer`)
 - `packages/typescript-config`: shared tsconfig presets
 - `integrations/core`: the adapter interface every sending integration
   implements (`@workspace/integration-core`)

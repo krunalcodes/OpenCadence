@@ -43,6 +43,13 @@
       "when": 1791710552304,
       "tag": "0005_cooing_the_hood",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791713531009,
+      "tag": "0006_thick_green_goblin",
+      "breakpoints": true
     }
   ]
 }

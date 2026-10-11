@@ -62,7 +62,7 @@ list size.
 - Workspaces scope all data. Agencies switch between many of them.
 - Unsubscribe handling and suppression apply to every send path and cannot be
   turned off.
-- Undecided: authentication library, i18n library, email builder/editor.
+- Undecided: i18n library.
 
 ## Brand Commitments
 

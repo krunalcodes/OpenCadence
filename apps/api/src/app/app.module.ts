@@ -6,16 +6,20 @@ import { DatabaseModule } from "../infra/database/database.module";
 import { QueueModule } from "../infra/queue/queue.module";
 import { RedisModule } from "../infra/redis/redis.module";
 import { StorageModule } from "../infra/storage/storage.module";
+import { AiModule } from "../modules/ai/ai.module";
 import { AuthModule } from "../modules/auth/auth.module";
+import { BrandModule } from "../modules/brand/brand.module";
 import { ContactsModule } from "../modules/contacts/contacts.module";
 import { DispatchModule } from "../modules/dispatch/dispatch.module";
 import { ImportsModule } from "../modules/imports/imports.module";
 import { IntegrationsModule } from "../modules/integrations/integrations.module";
 import { ListsModule } from "../modules/lists/lists.module";
+import { MediaModule } from "../modules/media/media.module";
 import { ProviderEventsModule } from "../modules/provider-events/provider-events.module";
 import { SegmentsModule } from "../modules/segments/segments.module";
 import { SuppressionModule } from "../modules/suppression/suppression.module";
 import { TagsModule } from "../modules/tags/tags.module";
+import { TemplatesModule } from "../modules/templates/templates.module";
 import { TransactionalModule } from "../modules/transactional/transactional.module";
 import { WarmupModule } from "../modules/warmup/warmup.module";
 import { WorkspacesModule } from "../modules/workspaces/workspaces.module";
@@ -46,7 +50,11 @@ import { AppService } from "./app.service";
     TagsModule,
     ContactsModule,
     SegmentsModule,
+    MediaModule,
+    BrandModule,
+    TemplatesModule,
     ImportsModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

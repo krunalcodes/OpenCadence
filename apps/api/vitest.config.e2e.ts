@@ -16,6 +16,7 @@ export default defineConfig({
       REDIS_URL: "redis://localhost:6379/1",
       CREDENTIALS_ENCRYPTION_KEY:
         "dGVzdC1vbmx5LWNyZWRlbnRpYWxzLWtleS0wMDAwMDA=",
+      AI_ALLOW_PRIVATE_ENDPOINTS: "true",
     },
   },
 });

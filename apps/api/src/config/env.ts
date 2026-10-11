@@ -21,6 +21,7 @@ export type Env = {
   GMAIL_CLIENT_SECRET?: string;
   GMAIL_CLIENT_SHARED: boolean;
   WEBHOOK_BASE_URL?: string;
+  MEDIA_BASE_URL: string;
   BULL_BOARD_USERNAME?: string;
   BULL_BOARD_PASSWORD?: string;
   S3_ENDPOINT: string;
@@ -29,6 +30,7 @@ export type Env = {
   S3_ACCESS_KEY_ID: string;
   S3_SECRET_ACCESS_KEY: string;
   S3_FORCE_PATH_STYLE: boolean;
+  AI_ALLOW_PRIVATE_ENDPOINTS: boolean;
 };
 
 export type EncryptionKey = {
@@ -169,6 +171,28 @@ function webhookBaseUrl(config: Record<string, unknown>) {
   return url.origin;
 }
 
+function mediaBaseUrl(config: Record<string, unknown>, webUrl: string) {
+  const raw =
+    optional(config, "MEDIA_BASE_URL")?.trim() ??
+    `${webUrl.trim().replace(/\/+$/, "")}/api/v1`;
+  const message =
+    "MEDIA_BASE_URL must be an http or https address that mail clients can reach, for example https://mail.example.com/api/v1.";
+  if (!URL.canParse(raw)) {
+    throw new Error(message);
+  }
+  const url = new URL(raw);
+  if (
+    (url.protocol !== "https:" && url.protocol !== "http:") ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    url.username !== "" ||
+    url.password !== ""
+  ) {
+    throw new Error(message);
+  }
+  return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
+}
+
 function forcePathStyle(config: Record<string, unknown>) {
   const raw = optional(config, "S3_FORCE_PATH_STYLE")?.trim().toLowerCase();
   if (raw === undefined || raw === "true") {
@@ -178,6 +202,19 @@ function forcePathStyle(config: Record<string, unknown>) {
     return false;
   }
   throw new Error('S3_FORCE_PATH_STYLE must be "true" or "false".');
+}
+
+function allowPrivateAiEndpoints(config: Record<string, unknown>) {
+  const raw = optional(config, "AI_ALLOW_PRIVATE_ENDPOINTS")
+    ?.trim()
+    .toLowerCase();
+  if (raw === undefined || raw === "false") {
+    return false;
+  }
+  if (raw === "true") {
+    return true;
+  }
+  throw new Error('AI_ALLOW_PRIVATE_ENDPOINTS must be "true" or "false".');
 }
 
 export function validateEnv(config: Record<string, unknown>) {
@@ -244,6 +281,7 @@ export function validateEnv(config: Record<string, unknown>) {
       : gmailClientSecret,
     GMAIL_CLIENT_SHARED: gmailClientShared,
     WEBHOOK_BASE_URL: webhookBaseUrl(config),
+    MEDIA_BASE_URL: mediaBaseUrl(config, required(config, "BETTER_AUTH_URL")),
     BULL_BOARD_USERNAME: bullBoardUsername,
     BULL_BOARD_PASSWORD: bullBoardPassword,
     S3_ENDPOINT:
@@ -260,6 +298,7 @@ export function validateEnv(config: Record<string, unknown>) {
       optional(config, "MINIO_ROOT_PASSWORD") ??
       "opencadence",
     S3_FORCE_PATH_STYLE: forcePathStyle(config),
+    AI_ALLOW_PRIVATE_ENDPOINTS: allowPrivateAiEndpoints(config),
   };
 
   return { ...config, ...env };

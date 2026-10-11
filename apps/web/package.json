@@ -10,6 +10,7 @@
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@react-email/editor": "^1.7.12",
     "@workspace/auth": "workspace:*",
     "@workspace/ui": "workspace:*",
     "better-auth": "^1.7.7",

@@ -1,0 +1,332 @@
+:root:root {
+  --re-bg: var(--popover);
+  --re-bg-active: var(--accent);
+  --re-bg-hover: var(--muted);
+  --re-border: var(--border);
+  --re-text: var(--foreground);
+  --re-text-muted: var(--muted-foreground);
+  --re-hover: var(--muted);
+  --re-active: var(--accent);
+  --re-pressed: var(--accent);
+  --re-separator: var(--border);
+  --re-radius: 0.5rem;
+  --re-radius-sm: 0.375rem;
+  --re-shadow:
+    0 12px 28px -10px rgb(20 32 27 / 0.2), 0 2px 6px -2px rgb(20 32 27 / 0.1);
+  --re-danger: var(--danger, var(--destructive));
+  --re-danger-hover: var(--danger-surface, var(--muted));
+  --re-tooltip-bg: var(--foreground);
+  --re-tooltip-text: var(--background);
+}
+
+[data-re-bubble-menu],
+[data-re-slash-command],
+[data-re-node-selector-content],
+[data-re-link-selector-form] {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--re-text);
+}
+
+[data-re-bubble-menu] {
+  padding: 0 0.1875rem;
+}
+
+[data-re-bubble-menu-group] {
+  border-left-color: var(--border-subtle, var(--re-border));
+}
+
+[data-re-bubble-menu-item],
+[data-re-link-bm-item],
+[data-re-btn-bm-item],
+[data-re-img-bm-item] {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  margin: 0.1875rem 0;
+}
+
+[data-re-bubble-menu-item] svg,
+[data-re-link-bm-item] svg,
+[data-re-btn-bm-item] svg,
+[data-re-img-bm-item] svg {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 1.6;
+}
+
+[data-re-bubble-menu-item][data-active],
+[data-re-bubble-menu-item][aria-pressed="true"],
+[data-re-link-selector-trigger][aria-pressed="true"] {
+  background: var(--re-pressed);
+  color: var(--primary);
+}
+
+[data-re-node-selector-trigger] {
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+[data-re-node-selector-item] {
+  font-size: 13px;
+}
+
+[data-re-node-selector-item][data-active] {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+[data-re-link-selector-input],
+[data-re-link-bm-input],
+[data-re-btn-bm-input],
+[data-re-img-bm-input] {
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+[data-re-bubble-menu] button:focus-visible,
+[data-re-bubble-menu] a:focus-visible,
+[data-re-node-selector-content] button:focus-visible,
+[data-re-link-selector-form] button:focus-visible,
+[data-re-slash-command-item]:focus-visible,
+[data-re-inspector-section] button:focus-visible,
+[data-re-inspector-breadcrumb-button]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+[data-re-slash-command] {
+  padding: 0.25rem;
+  min-width: 15rem;
+}
+
+[data-re-slash-command-item] {
+  font-size: 13px;
+}
+
+[data-re-slash-command-item][data-selected] {
+  background: var(--accent);
+}
+
+[data-re-slash-command-item][data-selected] svg {
+  color: var(--primary);
+}
+
+[data-re-slash-command-category] {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-tertiary, var(--re-text-muted));
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+[data-re-slash-command-empty] {
+  font-size: 13px;
+}
+
+.oc-inspector {
+  font-size: 12.5px;
+  color: var(--foreground);
+}
+
+.oc-inspector [data-re-inspector-section] {
+  gap: 0.625rem;
+  padding: 0.875rem 0;
+  border-bottom-color: var(--border-subtle, var(--border));
+}
+
+.oc-inspector [data-re-inspector-section]:first-child {
+  padding-top: 0.25rem;
+}
+
+.oc-inspector [data-re-inspector-section-toggle] {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--foreground);
+  border-radius: 4px;
+}
+
+.oc-inspector [data-re-inspector-label],
+.oc-inspector [data-re-inspector-field] > label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.oc-inspector [data-re-inspector-prop-row] {
+  min-height: 1.75rem;
+  font-size: 12.5px;
+}
+
+.oc-inspector [data-re-inspector-select],
+.oc-inspector [data-re-inspector-number],
+.oc-inspector [data-re-inspector-color-control] {
+  height: 1.75rem;
+  padding: 0 0.375rem;
+  border-color: var(--input);
+  border-radius: 0.375rem;
+  background: var(--card);
+  box-shadow: 0 1px 2px 0 rgb(20 32 27 / 0.05);
+}
+
+.oc-inspector [data-re-inspector-select]:focus-within,
+.oc-inspector [data-re-inspector-number]:focus-within,
+.oc-inspector [data-re-inspector-color-control]:focus-within {
+  border-color: var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.oc-inspector [data-re-inspector-select] select,
+.oc-inspector select[data-re-inspector-select] {
+  font-family: inherit;
+  font-size: 12.5px;
+  color: inherit;
+  background: transparent;
+  outline: none;
+}
+
+.oc-inspector [data-re-inspector-input],
+.oc-inspector [data-re-inspector-color-hex] {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: none;
+}
+
+.oc-inspector [data-re-inspector-color-trigger] {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+}
+
+.oc-inspector [data-re-inspector-toggle-group] {
+  border-color: var(--input);
+  border-radius: 0.375rem;
+  background: var(--card);
+}
+
+.oc-inspector [data-re-inspector-toggle-item] {
+  min-width: 1.75rem;
+  height: 1.625rem;
+  color: var(--muted-foreground);
+}
+
+.oc-inspector [data-re-inspector-toggle-item]:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.oc-inspector [data-re-inspector-toggle-item][data-active] {
+  background: var(--accent);
+  color: var(--primary);
+}
+
+.oc-inspector [data-re-inspector-button] {
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  border-color: var(--border);
+  border-radius: 0.375rem;
+  background: var(--card);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.oc-inspector [data-re-inspector-icon-button] {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.375rem;
+  color: var(--muted-foreground);
+}
+
+.oc-inspector [data-re-inspector-icon-button]:hover {
+  color: var(--foreground);
+}
+
+.oc-inspector [data-re-inspector-tooltip-content] {
+  font-size: 12px;
+  border-radius: 0.375rem;
+}
+
+.oc-inspector [data-re-inspector-breadcrumb-list] {
+  flex-wrap: wrap;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  font-size: 12px;
+}
+
+.oc-inspector [data-re-inspector-breadcrumb-button] {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  border-radius: 4px;
+}
+
+.oc-inspector
+  [data-re-inspector-breadcrumb-item]:last-child
+  [data-re-inspector-breadcrumb-button] {
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.oc-inspector [data-re-inspector-breadcrumb-separator],
+.oc-inspector [data-re-inspector-breadcrumb-ellipsis] {
+  color: var(--ink-tertiary, var(--muted-foreground));
+}
+
+.oc-canvas {
+  background: var(--muted);
+}
+
+.oc-canvas > .tiptap {
+  min-height: 100%;
+  box-sizing: border-box;
+  caret-color: currentColor;
+}
+
+.oc-canvas .tiptap .node-container {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+.oc-canvas .tiptap img {
+  max-width: 100%;
+  height: auto;
+}
+
+.oc-canvas .tiptap img.ProseMirror-selectednode,
+.oc-canvas .tiptap .ProseMirror-selectednode > .node-button,
+.oc-canvas .tiptap hr.ProseMirror-selectednode {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.oc-canvas .tiptap .node-column,
+.oc-canvas .tiptap .node-section {
+  outline: 1px dashed transparent;
+  outline-offset: -1px;
+  transition: outline-color 0.15s;
+}
+
+.oc-canvas .tiptap:focus-within .node-column,
+.oc-canvas .tiptap:focus-within .node-section {
+  outline-color: color-mix(in srgb, var(--ring) 28%, transparent);
+}
+
+.oc-canvas .tiptap ::selection {
+  background: color-mix(in srgb, var(--ring) 22%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oc-canvas .tiptap .node-column,
+  .oc-canvas .tiptap .node-section {
+    transition: none;
+  }
+}

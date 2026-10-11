@@ -44,7 +44,7 @@ OpenCadence/
 │   ├── email/               system email templates and providers     (exists)
 │   ├── contracts/           request and response schemas shared by API and web
 │   ├── api-client/          typed client generated from the OpenAPI document
-│   ├── email-renderer/      merge tags, spintax, template to HTML and text
+│   ├── email-renderer/      merge tags, spintax, template to HTML and text   (exists)
 │   ├── i18n/                locale catalogs for the app, public pages, emails
 │   └── env/                 environment variable schema and loader
 ├── integrations/            one package per mailbox type or provider  (exists)
@@ -117,9 +117,10 @@ apps/api/
 │       ├── forms/                 subscription forms and public pages
 │       ├── consent/               consent records, export and erasure requests
 │       ├── suppression/           unsubscribes, bounces, complaints, blocklist (exists)
-│       ├── templates/
-│       ├── media/
-│       ├── ai/                    writing assistant
+│       ├── templates/ (exists)
+│       ├── media/                 uploaded images and their public addresses (exists)
+│       ├── brand/                 brand settings used by emails and the assistant (exists)
+│       ├── ai/                    writing assistant                   (exists)
 │       ├── campaigns/
 │       ├── sequences/
 │       ├── transactional/         the send-one-email API              (exists)

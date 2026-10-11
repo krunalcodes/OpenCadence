@@ -16,6 +16,7 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.67",
     "@aws-sdk/client-s3": "^3.1149.0",
     "@bull-board/api": "^9.10.4",
     "@bull-board/fastify": "^9.10.4",
@@ -30,10 +31,12 @@
     "@workspace/auth": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/email": "workspace:*",
+    "@workspace/email-renderer": "workspace:*",
     "@workspace/integration-core": "workspace:*",
     "@workspace/integration-gmail": "workspace:*",
     "@workspace/integration-imap-smtp": "workspace:*",
     "@workspace/integration-resend": "workspace:*",
+    "ai": "^7.0.137",
     "bullmq": "^6.3.12",
     "ioredis": "^6.0.0",
     "reflect-metadata": "^0.2.2",

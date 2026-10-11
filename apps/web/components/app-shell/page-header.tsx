@@ -17,10 +17,12 @@ import {
   ListChecks,
   type LucideIcon,
   Mail,
+  Palette,
   Plug,
   ScrollText,
   Settings,
   ShieldCheck,
+  Sparkles,
   UserRound,
   Users,
   UsersRound,
@@ -65,6 +67,8 @@ const pageIcons: Record<string, LucideIcon> = {
   "settings/security": ShieldCheck,
   "settings/workspace": Building2,
   "settings/members": UsersRound,
+  "settings/brand": Palette,
+  "settings/ai": Sparkles,
   "settings/api-keys": KeyRound,
 };
 

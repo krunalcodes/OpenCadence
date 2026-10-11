@@ -130,6 +130,16 @@ export const areas: NavArea[] = [
         keywords: "team people invitations invite roles",
       },
       {
+        title: "Brand",
+        path: "settings/brand",
+        keywords: "logo colours colors font voice address social identity",
+      },
+      {
+        title: "AI",
+        path: "settings/ai",
+        keywords: "assistant model provider api key llm writing",
+      },
+      {
         title: "API keys",
         path: "settings/api-keys",
         keywords: "tokens developers",
