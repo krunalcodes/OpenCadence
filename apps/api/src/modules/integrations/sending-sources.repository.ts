@@ -177,6 +177,18 @@ export class SendingSourcesRepository {
     return row ?? null;
   }
 
+  async clearDefault(workspaceId: string, executor: Executor = this.db) {
+    await executor
+      .update(sendingSources)
+      .set({ isDefault: false })
+      .where(
+        and(
+          eq(sendingSources.workspaceId, workspaceId),
+          eq(sendingSources.isDefault, true),
+        ),
+      );
+  }
+
   async findCredentials(sourceId: string, executor: Executor = this.db) {
     const [row] = await executor
       .select()
@@ -273,6 +285,7 @@ export class SendingSourcesRepository {
 
   async insertEvent(event: NewEvent, executor: Executor = this.db) {
     await executor.insert(sendingSourceEvents).values({
+      createdAt: new Date(),
       workspaceId: event.workspaceId,
       sourceId: event.sourceId,
       severity: event.severity,

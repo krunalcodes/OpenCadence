@@ -23,6 +23,12 @@ export type Env = {
   WEBHOOK_BASE_URL?: string;
   BULL_BOARD_USERNAME?: string;
   BULL_BOARD_PASSWORD?: string;
+  S3_ENDPOINT: string;
+  S3_REGION: string;
+  S3_BUCKET: string;
+  S3_ACCESS_KEY_ID: string;
+  S3_SECRET_ACCESS_KEY: string;
+  S3_FORCE_PATH_STYLE: boolean;
 };
 
 export type EncryptionKey = {
@@ -163,6 +169,17 @@ function webhookBaseUrl(config: Record<string, unknown>) {
   return url.origin;
 }
 
+function forcePathStyle(config: Record<string, unknown>) {
+  const raw = optional(config, "S3_FORCE_PATH_STYLE")?.trim().toLowerCase();
+  if (raw === undefined || raw === "true") {
+    return true;
+  }
+  if (raw === "false") {
+    return false;
+  }
+  throw new Error('S3_FORCE_PATH_STYLE must be "true" or "false".');
+}
+
 export function validateEnv(config: Record<string, unknown>) {
   const secret = required(config, "BETTER_AUTH_SECRET");
   if (secret.length < 32) {
@@ -229,6 +246,20 @@ export function validateEnv(config: Record<string, unknown>) {
     WEBHOOK_BASE_URL: webhookBaseUrl(config),
     BULL_BOARD_USERNAME: bullBoardUsername,
     BULL_BOARD_PASSWORD: bullBoardPassword,
+    S3_ENDPOINT:
+      optional(config, "S3_ENDPOINT")?.trim() ??
+      `http://localhost:${optional(config, "MINIO_PORT")?.trim() ?? "9000"}`,
+    S3_REGION: optional(config, "S3_REGION")?.trim() ?? "us-east-1",
+    S3_BUCKET: optional(config, "S3_BUCKET")?.trim() ?? "opencadence",
+    S3_ACCESS_KEY_ID:
+      optional(config, "S3_ACCESS_KEY_ID")?.trim() ??
+      optional(config, "MINIO_ROOT_USER")?.trim() ??
+      "opencadence",
+    S3_SECRET_ACCESS_KEY:
+      optional(config, "S3_SECRET_ACCESS_KEY") ??
+      optional(config, "MINIO_ROOT_PASSWORD") ??
+      "opencadence",
+    S3_FORCE_PATH_STYLE: forcePathStyle(config),
   };
 
   return { ...config, ...env };

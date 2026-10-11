@@ -157,6 +157,10 @@ credentials, copy `.env.example` to `.env` and edit it.
 The web app runs at http://localhost:3000 and the API at
 http://localhost:3001/v1, with API docs at http://localhost:3001/docs.
 
+Background jobs run in a separate queue worker process built from the same
+code as the API. `bun run dev` starts it next to the API; in production run
+both `node dist/main.js` and `node dist/worker.js` from `apps/api`.
+
 The API needs `CREDENTIALS_ENCRYPTION_KEY` in `.env` before it starts. It
 encrypts the provider keys and mailbox tokens you connect. Generate one with
 `openssl rand -base64 32` and keep it safe: connected sources cannot be read

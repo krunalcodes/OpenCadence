@@ -1,7 +1,9 @@
 import { Inject, Module, type OnModuleInit } from "@nestjs/common";
 import { HttpAdapterHost } from "@nestjs/core";
+import { DispatchModule } from "../dispatch/dispatch.module";
 import { IntegrationsModule } from "../integrations/integrations.module";
-import { SendingSourcesService } from "../integrations/sending-sources.service";
+import { SuppressionModule } from "../suppression/suppression.module";
+import { ProviderEventsService } from "./provider-events.service";
 
 type WebhookRequest = {
   body: unknown;
@@ -37,12 +39,15 @@ type WebhookServer = {
 
 const statusByOutcome = { accepted: 204, not_found: 404, rejected: 401 };
 
-@Module({ imports: [IntegrationsModule] })
+@Module({
+  imports: [DispatchModule, IntegrationsModule, SuppressionModule],
+  providers: [ProviderEventsService],
+})
 export class ProviderEventsModule implements OnModuleInit {
   constructor(
     @Inject(HttpAdapterHost) private readonly host: HttpAdapterHost,
-    @Inject(SendingSourcesService)
-    private readonly sources: SendingSourcesService,
+    @Inject(ProviderEventsService)
+    private readonly events: ProviderEventsService,
   ) {}
 
   onModuleInit() {
@@ -61,7 +66,7 @@ export class ProviderEventsModule implements OnModuleInit {
           for (const [name, value] of Object.entries(request.headers)) {
             headers[name] = Array.isArray(value) ? value[0] : value;
           }
-          const outcome = await this.sources.receiveWebhook(
+          const outcome = await this.events.receive(
             request.params.type,
             request.params.sourceId,
             typeof request.body === "string" ? request.body : "",

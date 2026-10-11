@@ -1,3 +1,5 @@
+import type { IntegrationMark } from "@/lib/brand-icons";
+
 export type IntegrationId =
   | "gmail"
   | "outlook"
@@ -46,7 +48,7 @@ export type ConnectField =
   | { id: string; kind: "region"; label: string; hint: string; missing: string }
   | { id: string; kind: "security"; label: string; half?: boolean };
 
-export type IntegrationMark = { id: string; mark: string | null };
+export type { IntegrationMark };
 
 export type Integration = {
   id: IntegrationId;

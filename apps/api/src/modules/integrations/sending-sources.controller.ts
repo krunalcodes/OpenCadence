@@ -179,6 +179,7 @@ export class SendingSourcesController {
         name: { type: "string", maxLength: 80 },
         dailySendLimit: { type: "integer", minimum: 1, nullable: true },
         paused: { type: "boolean" },
+        isDefault: { type: "boolean" },
       },
     },
   })
@@ -187,11 +188,12 @@ export class SendingSourcesController {
     @Param("id") id: string,
     @Body() input: unknown,
   ) {
-    const { name, dailySendLimit, paused } = body(input);
+    const { name, dailySendLimit, paused, isDefault } = body(input);
     return this.sources.update(actorOf(workspace), id, {
       name,
       dailySendLimit,
       paused,
+      isDefault,
     } as SourcePatch);
   }
 

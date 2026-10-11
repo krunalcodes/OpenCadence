@@ -13,11 +13,9 @@ import { Check, Copy } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { SourceMark } from "@/components/product/source-mark";
+import { secondaryButtonClass } from "@/components/product/styles";
 import { StatusBadge } from "@/components/status-badge";
-import {
-  SourceMark,
-  secondaryButtonClass,
-} from "@/features/integrations/components/integration-parts";
 import {
   activityCopy,
   type EventClock,

@@ -1,5 +1,6 @@
 import {
   Activity,
+  Ban,
   Building2,
   ClipboardList,
   Code,
@@ -50,6 +51,7 @@ const pageIcons: Record<string, LucideIcon> = {
   contacts: Users,
   segments: Funnel,
   forms: ClipboardList,
+  suppressions: Ban,
   deliverability: HeartPulse,
   domains: Globe,
   integrations: Plug,

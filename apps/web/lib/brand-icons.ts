@@ -1,5 +1,7 @@
 export type BrandIcon = { path: string; color: string | null };
 
+export type IntegrationMark = { id: string; mark: string | null };
+
 export const brandIcons: Record<string, BrandIcon> = {
   gmail: {
     color: "#EA4335",

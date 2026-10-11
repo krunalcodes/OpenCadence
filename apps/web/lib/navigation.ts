@@ -70,6 +70,12 @@ export const areas: NavArea[] = [
       { title: "Contacts", path: "contacts", count: "48,210" },
       { title: "Segments", path: "segments" },
       { title: "Forms", path: "forms" },
+      {
+        title: "Suppression list",
+        path: "suppressions",
+        keywords:
+          "suppressed blocked blocklist unsubscribes bounces complaints",
+      },
     ],
     views: [
       { title: "Active customers", tone: "live", count: "3,482" },

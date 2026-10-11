@@ -23,9 +23,12 @@ placeholders in `apps/web/features/marketing/lib/pricing.ts`.
   no dependency on a maintainer-run service. A hosted version may come later
   and will run the same code, so avoid single-tenant assumptions: scope data
   to a workspace.
-- **Compliance is not optional.** Unsubscribe handling, suppression lists, and
-  bounce/complaint processing apply to every send path, including sequences.
-  Do not add ways to bypass them.
+- **Compliance is not optional.** Suppression and bounce/complaint
+  processing apply to every send path, including sequences and transactional
+  email. Hard bounces, complaints, and manual blocks stop every email. An
+  unsubscribe stops campaigns and sequences but not transactional email (a
+  receipt or password reset). Do not add ways to bypass them: every send goes
+  through the `dispatch` module, which does the check.
 - **Credentials are secrets.** Provider keys and mailbox passwords are
   encrypted at rest and never logged or returned by an API.
 
@@ -91,7 +94,9 @@ Turborepo monorepo on Bun workspaces (Bun 1.3+, Node 24+).
 - `apps/web`: Next.js app (port 3000)
 - `apps/api`: NestJS API on Fastify (port 3001), compiled with SWC. Routes are
   URI-versioned (`/v1/...`). Root module lives in `src/app/`; tests run on
-  Vitest
+  Vitest. `src/worker.ts` is the queue worker entrypoint (`WorkerModule`):
+  BullMQ processors live in `<domain>.worker.module.ts` files and run only
+  there, never in the API process
 - `packages/ui`: shared shadcn/ui components on Base UI (`@workspace/ui`)
 - `packages/db`: Drizzle schema, client, and migrations (`@workspace/db`)
 - `packages/auth`: Better Auth server factory and client (`@workspace/auth`)

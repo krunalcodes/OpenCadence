@@ -1,17 +1,8 @@
-import { HttpException, HttpStatus } from "@nestjs/common";
+import { HttpStatus } from "@nestjs/common";
 import type { IntegrationError } from "@workspace/integration-core";
+import { apiError } from "../../common/api-error";
 
-export function apiError(
-  status: HttpStatus,
-  code: string,
-  message: string,
-  field?: string,
-) {
-  return new HttpException(
-    { statusCode: status, code, message, ...(field ? { field } : {}) },
-    status,
-  );
-}
+export { apiError };
 
 const statusByCode: Record<IntegrationError["code"], HttpStatus> = {
   invalid_credentials: HttpStatus.BAD_REQUEST,

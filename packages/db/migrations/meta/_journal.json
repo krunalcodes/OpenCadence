@@ -22,6 +22,13 @@
       "when": 1791706587058,
       "tag": "0002_glossy_may_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791708286399,
+      "tag": "0003_silky_tombstone",
+      "breakpoints": true
     }
   ]
 }

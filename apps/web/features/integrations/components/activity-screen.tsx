@@ -35,17 +35,16 @@ import { useRouter } from "next/navigation";
 import { Fragment, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { focusRing, PageHeader } from "@/components/app-shell/page-header";
-import { Spinner } from "@/components/spinner";
-import { StatusBadge } from "@/components/status-badge";
-import { ActivityDetailSheet } from "@/features/integrations/components/activity-detail-sheet";
+import { LoadFailed } from "@/components/product/load-failed";
+import { SourceMark } from "@/components/product/source-mark";
 import {
-  LoadFailed,
-  SourceMark,
   secondaryButtonClass,
   segmentedGroupClass,
   segmentedItemClass,
-} from "@/features/integrations/components/integration-parts";
-import { useHydrated } from "@/features/integrations/hooks/use-hydrated";
+} from "@/components/product/styles";
+import { Spinner } from "@/components/spinner";
+import { StatusBadge } from "@/components/status-badge";
+import { ActivityDetailSheet } from "@/features/integrations/components/activity-detail-sheet";
 import {
   activityCopy,
   createEventClock,
@@ -65,6 +64,7 @@ import type {
   SourceEvent,
 } from "@/features/integrations/lib/sources";
 import { fetchEvents } from "@/features/integrations/queries/mutations";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { appHref } from "@/lib/navigation";
 
 const levelIds: SeverityFilter[] = ["all", "warning", "error"];

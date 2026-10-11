@@ -75,16 +75,18 @@ main place outside contributors add code. It is the third workspace glob
 
 ## apps/api
 
-One NestJS application with two entrypoints. `main.ts` serves HTTP.
-`worker.ts` starts the same modules without the HTTP server and runs the
-BullMQ processors. In production these run as separate containers from the
-same image, so sending capacity scales without scaling the API.
+One NestJS application with two entrypoints. `main.ts` serves HTTP from
+`app/app.module.ts` and runs no BullMQ processors. `worker.ts` boots
+`app/worker.module.ts`: the same infrastructure modules with no HTTP server,
+plus one `<domain>.worker.module.ts` per module that has processors. In
+production these run as separate containers from the same image, so sending
+capacity scales without scaling the API.
 
 ```text
 apps/api/
 ├── src/
 │   ├── main.ts                    HTTP entrypoint                     (exists)
-│   ├── worker.ts                  queue worker entrypoint
+│   ├── worker.ts                  queue worker entrypoint             (exists)
 │   ├── app/                       root module                         (exists)
 │   ├── config/                    typed configuration per concern
 │   ├── common/                    cross-cutting code with no domain knowledge
@@ -98,7 +100,7 @@ apps/api/
 │   │   ├── database/                                                  (exists)
 │   │   ├── redis/                                                     (exists)
 │   │   ├── queue/                 BullMQ and the queue dashboard      (exists)
-│   │   ├── storage/
+│   │   ├── storage/               S3-compatible object storage        (exists)
 │   │   ├── crypto/                credential encryption               (exists)
 │   │   ├── i18n/
 │   │   └── logger/
@@ -115,18 +117,18 @@ apps/api/
 │       ├── imports/               CSV and tool imports, contact export
 │       ├── forms/                 subscription forms and public pages
 │       ├── consent/               consent records, export and erasure requests
-│       ├── suppression/           unsubscribes, bounces, complaints, blocklist
+│       ├── suppression/           unsubscribes, bounces, complaints, blocklist (exists)
 │       ├── templates/
 │       ├── media/
 │       ├── ai/                    writing assistant
 │       ├── campaigns/
 │       ├── sequences/
-│       ├── transactional/
+│       ├── transactional/         the send-one-email API              (exists)
 │       ├── inbox/                 unified reply inbox
 │       ├── integrations/          connected mailboxes and providers   (exists)
 │       ├── domains/               sending and tracking domains, DNS checks
 │       ├── warmup/
-│       ├── dispatch/              the send pipeline: limits, rotation, retries
+│       ├── dispatch/              the send pipeline: limits, rotation, retries (exists)
 │       ├── tracking/              open, click, and unsubscribe endpoints
 │       ├── provider-events/       inbound bounce and complaint webhooks (exists)
 │       ├── analytics/             dashboards and reports
@@ -350,8 +352,9 @@ packages/*  never import from apps/ or from integrations/
 These choices are built into the layout above and should be confirmed before
 the first code depends on them.
 
-1. **Workers share the API codebase** through a second entrypoint, in place
-   of a separate `apps/worker`.
+1. **Decided: queue workers are a separate process from the same codebase.**
+   `apps/api/src/worker.ts` is a second entrypoint, in place of a separate
+   `apps/worker`. Processors run only in the worker process.
 2. **Decided: integrations are a top-level workspace group** (`integrations/*`),
    in place of living under `packages/`. Packages are named
    `@workspace/integration-<name>`.

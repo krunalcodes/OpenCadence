@@ -17,6 +17,12 @@ export const copy = {
   connected: {
     title: "Connected sources",
     description: "The mailboxes and providers this workspace can send through",
+    defaultHint: "Emails sent by API without a source use the default source",
+    noDefaultHint:
+      "No default source yet. Emails sent by API without a source need one",
+    defaultBadge: "Default",
+    makeDefault: "Make default",
+    removeDefault: "Remove as default",
     searchLabel: "Search connected sources",
     searchPlaceholder: "Search sources",
     columns: {
@@ -107,6 +113,14 @@ export const copy = {
     pauseFailed: (name: string) => `Could not pause ${name}`,
     resumeFailed: (name: string) => `Could not resume ${name}`,
     undo: "Undo",
+    madeDefault: (name: string) => `${name} is now the default source`,
+    madeDefaultBody: "Emails sent by API without a source go through it.",
+    removedDefault: (name: string) => `${name} is no longer the default`,
+    removedDefaultBody:
+      "This workspace has no default source until you choose another one.",
+    makeDefaultFailed: (name: string) => `Could not make ${name} the default`,
+    removeDefaultFailed: (name: string) =>
+      `Could not remove ${name} as the default`,
     renamed: (name: string) => `Source renamed to ${name}`,
     renameFailed: "Could not rename the source",
     limitSet: (name: string, limit: string) =>
@@ -158,6 +172,8 @@ export const copy = {
         "Too many requests in a short time. Wait a minute, then try again.",
       quota_reached:
         "The provider's sending quota is used up for now. Try again later or check the plan on the provider's side.",
+      not_sendable:
+        "This source cannot be the default right now because it is not able to send. Resume it or fix its connection, then try again.",
       auth_revoked:
         "Google no longer accepts the saved access for this mailbox. Reconnect it to continue.",
     } as Record<string, string>,

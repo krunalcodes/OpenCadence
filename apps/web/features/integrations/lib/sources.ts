@@ -12,6 +12,7 @@ export type SendingSource = {
   name: string;
   email: string | null;
   status: SourceStatus;
+  isDefault: boolean;
   dailySendLimit: number | null;
   sentToday: number;
   lastError: SourceError | null;
@@ -103,6 +104,7 @@ export function toSource(value: unknown): SendingSource | null {
     name: textOrNull(value.name) ?? textOrNull(value.email) ?? integrationType,
     email: textOrNull(value.email),
     status: statuses.find((status) => status === value.status) ?? "active",
+    isDefault: value.isDefault === true,
     dailySendLimit:
       typeof value.dailySendLimit === "number" ? value.dailySendLimit : null,
     sentToday: countOf(value.sentToday),

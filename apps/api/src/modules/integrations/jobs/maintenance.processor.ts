@@ -1,7 +1,6 @@
 import { InjectQueue, Processor, WorkerHost } from "@nestjs/bullmq";
 import { Inject, type OnModuleInit } from "@nestjs/common";
 import type { Job, Queue } from "bullmq";
-import { QueueBoard } from "../../../infra/queue/queue-board.service";
 import { SendCounter } from "../send-counter";
 import { SendingSourcesRepository } from "../sending-sources.repository";
 
@@ -27,7 +26,6 @@ function partitionMonth(name: string) {
 export class MaintenanceProcessor extends WorkerHost implements OnModuleInit {
   constructor(
     @InjectQueue(MAINTENANCE_QUEUE) private readonly queue: Queue,
-    @Inject(QueueBoard) private readonly board: QueueBoard,
     @Inject(SendCounter) private readonly counter: SendCounter,
     @Inject(SendingSourcesRepository)
     private readonly repository: SendingSourcesRepository,
@@ -36,7 +34,6 @@ export class MaintenanceProcessor extends WorkerHost implements OnModuleInit {
   }
 
   async onModuleInit() {
-    this.board.register(this.queue);
     await this.queue.upsertJobScheduler(
       flushCounters,
       { every: 10_000 },

@@ -32,17 +32,16 @@ import { ArrowLeft, ChevronRight, Info } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { focusRing } from "@/components/app-shell/page-header";
-import { Spinner } from "@/components/spinner";
+import { SourceMark } from "@/components/product/source-mark";
 import {
-  comingSoonClass,
   inputClass,
   primaryButtonClass,
-  SourceMark,
   secondaryButtonClass,
   segmentedGroupClass,
   segmentedItemClass,
-} from "@/features/integrations/components/integration-parts";
-import { useOrigin } from "@/features/integrations/hooks/use-hydrated";
+} from "@/components/product/styles";
+import { Spinner } from "@/components/spinner";
+import { comingSoonClass } from "@/features/integrations/components/integration-parts";
 import {
   type ConnectField,
   findIntegration,
@@ -61,6 +60,7 @@ import {
   authorizeGmail,
   connectResend,
 } from "@/features/integrations/queries/mutations";
+import { useOrigin } from "@/hooks/use-hydrated";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

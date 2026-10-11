@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   customType,
   date,
@@ -47,6 +48,7 @@ export const sendingSources = pgTable(
       .default({})
       .notNull(),
     dailySendLimit: integer("daily_send_limit"),
+    isDefault: boolean("is_default").default(false).notNull(),
     lastErrorCode: text("last_error_code"),
     lastErrorMessage: text("last_error_message"),
     lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
@@ -73,6 +75,9 @@ export const sendingSources = pgTable(
       .where(
         sql`${table.externalAccountId} is not null and ${table.status} <> 'disconnected'`,
       ),
+    uniqueIndex("sending_sources_workspace_id_default_uidx")
+      .on(table.workspaceId)
+      .where(sql`${table.isDefault} and ${table.status} <> 'disconnected'`),
     index("sending_sources_workspace_id_status_idx").on(
       table.workspaceId,
       table.status,

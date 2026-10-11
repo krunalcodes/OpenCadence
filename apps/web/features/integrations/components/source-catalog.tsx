@@ -1,10 +1,8 @@
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
-import {
-  comingSoonClass,
-  SourceMark,
-  secondaryButtonClass,
-} from "@/features/integrations/components/integration-parts";
+import { SourceMark } from "@/components/product/source-mark";
+import { secondaryButtonClass } from "@/components/product/styles";
+import { comingSoonClass } from "@/features/integrations/components/integration-parts";
 import {
   formatFeatures,
   type IntegrationId,

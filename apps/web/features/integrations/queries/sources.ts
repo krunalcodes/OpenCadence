@@ -1,6 +1,5 @@
 import "server-only";
 
-import { headers } from "next/headers";
 import { cache } from "react";
 import {
   type EventFilters,
@@ -10,30 +9,7 @@ import {
   toEventsPage,
   toSourcesList,
 } from "@/features/integrations/lib/sources";
-
-const apiUrl = (process.env.API_URL ?? "http://localhost:3001").replace(
-  /\/+$/,
-  "",
-);
-
-type ApiResponse = { status: number; data: unknown };
-
-async function apiRequest(path: string): Promise<ApiResponse> {
-  const cookie = (await headers()).get("cookie");
-  if (!cookie) {
-    return { status: 401, data: null };
-  }
-  try {
-    const response = await fetch(`${apiUrl}/v1${path}`, {
-      headers: { cookie },
-      cache: "no-store",
-    });
-    const data: unknown = await response.json().catch(() => null);
-    return { status: response.status, data };
-  } catch {
-    return { status: 0, data: null };
-  }
-}
+import { apiRequest } from "@/lib/api-server";
 
 export const getSendingSources = cache(async (): Promise<SourcesResult> => {
   const { status, data } = await apiRequest("/sending-sources");

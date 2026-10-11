@@ -6,6 +6,8 @@ import {
   type IntegrationAdapter,
   IntegrationError,
   type OutboundMessage,
+  type ProviderEvent,
+  type SendResult,
   type SourceSettings,
   toIntegrationError,
 } from "@workspace/integration-core";
@@ -41,6 +43,7 @@ export type SendingSourceDto = {
   email: string | null;
   status: "active" | "paused" | "needs_attention";
   dailySendLimit: number | null;
+  isDefault: boolean;
   sentToday: number;
   lastError: { code: string; message: string; at: string } | null;
   lastTestedAt: string | null;
@@ -57,7 +60,30 @@ export type SourcePatch = {
   name?: string;
   dailySendLimit?: number | null;
   paused?: boolean;
+  isDefault?: boolean;
 };
+
+export type WebhookResult =
+  | { outcome: "not_found" | "rejected" | "duplicate" }
+  | {
+      outcome: "accepted";
+      workspaceId: string;
+      sourceId: string;
+      event: ProviderEvent;
+    };
+
+export class SourceUnavailableError extends Error {
+  constructor(
+    readonly code:
+      | "source_paused"
+      | "source_needs_attention"
+      | "source_missing",
+    message: string,
+  ) {
+    super(message);
+    this.name = "SourceUnavailableError";
+  }
+}
 
 export type EventsQuery = {
   sourceId?: string;
@@ -387,6 +413,33 @@ export class SendingSourcesService {
         events.push({ type: "limit_changed" });
       }
     }
+    let makeDefault = false;
+    if (patch.isDefault !== undefined) {
+      if (typeof patch.isDefault !== "boolean") {
+        throw apiError(
+          HttpStatus.BAD_REQUEST,
+          "validation",
+          "Send isDefault as true or false.",
+          "isDefault",
+        );
+      }
+      if (patch.isDefault && !source.isDefault) {
+        if (source.status === "needs_attention") {
+          throw apiError(
+            HttpStatus.CONFLICT,
+            "not_sendable",
+            "Fix this source before making it the default.",
+          );
+        }
+        makeDefault = true;
+        changes.isDefault = true;
+        events.push({ type: "made_default" });
+      }
+      if (!patch.isDefault && source.isDefault) {
+        changes.isDefault = false;
+        events.push({ type: "default_removed" });
+      }
+    }
     if (patch.paused !== undefined) {
       if (typeof patch.paused !== "boolean") {
         throw apiError(
@@ -412,6 +465,9 @@ export class SendingSourcesService {
     if (events.length > 0) {
       try {
         await this.repository.transaction(async (tx) => {
+          if (makeDefault) {
+            await this.repository.clearDefault(actor.workspaceId, tx);
+          }
           await this.repository.updateSource(
             actor.workspaceId,
             id,
@@ -594,7 +650,11 @@ export class SendingSourcesService {
       await this.repository.updateSource(
         actor.workspaceId,
         id,
-        { status: "disconnected", disconnectedAt: new Date() },
+        {
+          status: "disconnected",
+          disconnectedAt: new Date(),
+          isDefault: false,
+        },
         tx,
       );
       await this.repository.insertEvent(
@@ -664,9 +724,9 @@ export class SendingSourcesService {
     sourceId: string,
     rawBody: string,
     headers: Record<string, string | undefined>,
-  ): Promise<"accepted" | "not_found" | "rejected"> {
+  ): Promise<WebhookResult> {
     if (!uuidPattern.test(sourceId)) {
-      return "not_found";
+      return { outcome: "not_found" };
     }
     const source = await this.repository.findSourceById(sourceId);
     const adapter = this.adapters.find(integrationType);
@@ -675,19 +735,19 @@ export class SendingSourcesService {
       source.integrationType !== integrationType ||
       !adapter?.webhooks
     ) {
-      return "not_found";
+      return { outcome: "not_found" };
     }
     const row = await this.repository.findCredentials(sourceId);
     const signingSecret = row ? this.credentials.openWebhookSecret(row) : null;
     if (!signingSecret) {
-      return "not_found";
+      return { outcome: "not_found" };
     }
 
     let event: ReturnType<NonNullable<IntegrationAdapter["webhooks"]>["parse"]>;
     try {
       event = adapter.webhooks.parse({ rawBody, headers, signingSecret });
     } catch {
-      return "rejected";
+      return { outcome: "rejected" };
     }
 
     const fresh = await this.repository.insertWebhookReceipt(
@@ -696,7 +756,7 @@ export class SendingSourcesService {
       event.id,
     );
     if (!fresh) {
-      return "accepted";
+      return { outcome: "duplicate" };
     }
 
     const serious =
@@ -716,7 +776,96 @@ export class SendingSourcesService {
         recipientCount: event.recipients.length,
       },
     });
-    return "accepted";
+    return {
+      outcome: "accepted",
+      workspaceId: source.workspaceId,
+      sourceId,
+      event,
+    };
+  }
+
+  async resolveForSend(workspaceId: string, sourceId?: string) {
+    if (sourceId) {
+      return this.requireSource(workspaceId, sourceId);
+    }
+    const sources = await this.repository.listSources(workspaceId);
+    const chosen =
+      sources.find((source) => source.isDefault) ??
+      (sources.length === 1 ? sources[0] : undefined);
+    if (!chosen) {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "no_default_source",
+        sources.length === 0
+          ? "Connect a sending source before sending email."
+          : "Choose a default sending source, or pass sourceId with the request.",
+        "sourceId",
+      );
+    }
+    return chosen;
+  }
+
+  async deliver(
+    workspaceId: string,
+    sourceId: string,
+    message: OutboundMessage,
+  ): Promise<SendResult> {
+    const source = await this.repository.findSource(workspaceId, sourceId);
+    if (!source) {
+      throw new SourceUnavailableError(
+        "source_missing",
+        "The sending source was disconnected.",
+      );
+    }
+    if (source.pausedAt) {
+      throw new SourceUnavailableError(
+        "source_paused",
+        "Sending through this source is paused.",
+      );
+    }
+    if (source.status === "needs_attention") {
+      throw new SourceUnavailableError(
+        "source_needs_attention",
+        "This sending source needs attention before it can send.",
+      );
+    }
+    const adapter = this.adapters.find(source.integrationType);
+    if (!adapter) {
+      throw new SourceUnavailableError(
+        "source_missing",
+        "This kind of sending source is not available on this server.",
+      );
+    }
+
+    const reserved = await this.counter.reserve(
+      workspaceId,
+      sourceId,
+      source.dailySendLimit,
+    );
+    if (!reserved) {
+      throw new IntegrationError(
+        "daily_limit_reached",
+        "This source has reached its daily sending limit.",
+      );
+    }
+
+    try {
+      return await this.withCredentials(source, adapter, (credentials) =>
+        adapter.send(credentials, message),
+      );
+    } catch (error) {
+      await this.counter.release(sourceId);
+      const failure = toIntegrationError(error);
+      if (brokenCredentialCodes.includes(failure.code)) {
+        await this.recordFailure(
+          { workspaceId, userId: null },
+          source,
+          failure,
+          "send_failed",
+        );
+      }
+      throw failure;
+    }
   }
 
   private async insert(
@@ -972,6 +1121,7 @@ export class SendingSourcesService {
         email: row.email,
         status: row.status as SendingSourceDto["status"],
         dailySendLimit: row.dailySendLimit,
+        isDefault: row.isDefault,
         sentToday: health.at(-1)?.sent ?? 0,
         lastError:
           row.lastErrorCode && row.lastErrorAt

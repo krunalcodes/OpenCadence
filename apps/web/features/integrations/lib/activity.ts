@@ -3,6 +3,10 @@ import type {
   EventSeverity,
   SourceEvent,
 } from "@/features/integrations/lib/sources";
+import {
+  createEventClock as createClock,
+  type DateMode,
+} from "@/lib/event-clock";
 
 export const severityTones: Record<EventSeverity, BadgeTone> = {
   info: "success",
@@ -205,66 +209,8 @@ export function eventResponse(event: Pick<SourceEvent, "code" | "message">) {
   return event.code ? `${event.code}\n${event.message}` : event.message;
 }
 
-export type DateMode = "local" | "stable";
+export type { EventClock, EventMoment } from "@/lib/event-clock";
 
-const stableLocale = "en-US";
-const stableZone = "UTC";
-
-function zoneOf(mode: DateMode) {
-  return mode === "stable" ? stableZone : undefined;
-}
-
-function localeOf(mode: DateMode) {
-  return mode === "stable" ? stableLocale : undefined;
-}
-
-export type EventMoment = {
-  iso: string;
-  dayKey: string;
-  day: string;
-  time: string;
-};
-
-export type EventClock = (value: string) => EventMoment | null;
-
-const dayLength = 24 * 60 * 60 * 1000;
-
-export function createEventClock(mode: DateMode, now: Date): EventClock {
-  const keyFormat = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: zoneOf(mode),
-  });
-  const today = keyFormat.format(now);
-  const yesterday = keyFormat.format(new Date(now.getTime() - dayLength));
-  const dayFormat = new Intl.DateTimeFormat(localeOf(mode), {
-    dateStyle: "medium",
-    timeZone: zoneOf(mode),
-  });
-  const timeFormat = new Intl.DateTimeFormat(localeOf(mode), {
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZone: zoneOf(mode),
-  });
-
-  return (value) => {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return null;
-    }
-    const key = keyFormat.format(date);
-    return {
-      iso: date.toISOString(),
-      dayKey: key,
-      day:
-        key === today
-          ? activityCopy.days.today
-          : key === yesterday
-            ? activityCopy.days.yesterday
-            : dayFormat.format(date),
-      time: timeFormat.format(date),
-    };
-  };
+export function createEventClock(mode: DateMode, now: Date) {
+  return createClock(mode, now, activityCopy.days);
 }

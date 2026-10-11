@@ -19,7 +19,6 @@ import { Switch } from "@workspace/ui/components/switch";
 import { cn } from "@workspace/ui/lib/utils";
 import { type FormEvent, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Spinner } from "@/components/spinner";
 import {
   dangerButtonClass,
   dialogActionsClass,
@@ -28,7 +27,8 @@ import {
   inputClass,
   primaryButtonClass,
   secondaryButtonClass,
-} from "@/features/integrations/components/integration-parts";
+} from "@/components/product/styles";
+import { Spinner } from "@/components/spinner";
 import {
   copy,
   describeError,

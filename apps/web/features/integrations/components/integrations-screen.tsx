@@ -19,13 +19,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell/page-header";
-import { ConnectSheet } from "@/features/integrations/components/connect-sheet";
+import { LoadFailed } from "@/components/product/load-failed";
+import { SectionCard } from "@/components/product/section-card";
 import {
-  LoadFailed,
   primaryButtonClass,
-  SectionCard,
   secondaryButtonClass,
-} from "@/features/integrations/components/integration-parts";
+} from "@/components/product/styles";
+import { ConnectSheet } from "@/features/integrations/components/connect-sheet";
 import { SourceCatalog } from "@/features/integrations/components/source-catalog";
 import {
   DailyLimitDialog,
@@ -76,6 +76,7 @@ export function IntegrationsScreen({
   const router = useRouter();
   const [seen, setSeen] = useState(result);
   const [overrides, setOverrides] = useState<Record<string, SendingSource>>({});
+  const [defaultId, setDefaultId] = useState<string | null>();
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [picked, setPicked] = useState<IntegrationId | null>(null);
@@ -92,6 +93,7 @@ export function IntegrationsScreen({
   if (seen !== result) {
     setSeen(result);
     setOverrides({});
+    setDefaultId(undefined);
   }
 
   useEffect(() => {
@@ -113,8 +115,14 @@ export function IntegrationsScreen({
 
   const ready = result.state === "ready";
   const sources = ready
-    ? result.sources.map((source) => overrides[source.id] ?? source)
+    ? result.sources.map((item) => {
+        const source = overrides[item.id] ?? item;
+        return defaultId === undefined
+          ? source
+          : { ...source, isDefault: source.id === defaultId };
+      })
     : noSources;
+  const hasDefault = sources.some((source) => source.isDefault);
 
   const needle = query.trim().toLowerCase();
   const visible = sources.filter(
@@ -223,6 +231,43 @@ export function IntegrationsScreen({
     );
   }
 
+  async function handleToggleDefault(source: SendingSource) {
+    if (busy) {
+      return;
+    }
+    const isDefault = !source.isDefault;
+    setBusy({ id: source.id, action: "default" });
+    const response = await updateSource(source.id, { isDefault });
+    setBusy(null);
+    if (!response.ok) {
+      toast.error(
+        isDefault
+          ? copy.toasts.makeDefaultFailed(source.name)
+          : copy.toasts.removeDefaultFailed(source.name),
+        { description: describeError(response.error) },
+      );
+      if (
+        response.error.code === "not_found" ||
+        response.error.code === "not_sendable"
+      ) {
+        router.refresh();
+      }
+      return;
+    }
+    setDefaultId(isDefault ? source.id : null);
+    applySource(response.data);
+    toast.success(
+      isDefault
+        ? copy.toasts.madeDefault(source.name)
+        : copy.toasts.removedDefault(source.name),
+      {
+        description: isDefault
+          ? copy.toasts.madeDefaultBody
+          : copy.toasts.removedDefaultBody,
+      },
+    );
+  }
+
   async function handleReconnect(source: SendingSource) {
     if (busy) {
       return;
@@ -276,7 +321,13 @@ export function IntegrationsScreen({
       <SectionCard
         id="integrations-connected"
         title={copy.connected.title}
-        description={copy.connected.description}
+        description={
+          sources.length === 0
+            ? copy.connected.description
+            : hasDefault
+              ? copy.connected.defaultHint
+              : copy.connected.noDefaultHint
+        }
         action={
           sources.length > 0 ? (
             <InputGroup className="h-8 w-56 bg-card shadow-xs">
@@ -352,6 +403,7 @@ export function IntegrationsScreen({
             onRename={openDialog("rename")}
             onSetLimit={openDialog("limit")}
             onTogglePause={handleTogglePause}
+            onToggleDefault={handleToggleDefault}
             onDisconnect={openDialog("disconnect")}
             onReconnect={handleReconnect}
           />

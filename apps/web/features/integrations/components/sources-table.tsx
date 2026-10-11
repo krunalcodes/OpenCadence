@@ -30,15 +30,15 @@ import {
   Play,
   PlugZap,
   Send,
+  Star,
+  StarOff,
   Unplug,
 } from "lucide-react";
 import { buttonFocusRing, focusRing } from "@/components/app-shell/page-header";
+import { SourceMark } from "@/components/product/source-mark";
+import { secondaryButtonClass } from "@/components/product/styles";
 import { Spinner } from "@/components/spinner";
 import { StatusBadge } from "@/components/status-badge";
-import {
-  SourceMark,
-  secondaryButtonClass,
-} from "@/features/integrations/components/integration-parts";
 import { integrationMark } from "@/features/integrations/lib/catalog";
 import {
   copy,
@@ -58,7 +58,7 @@ const headClass =
 const cellClass = "px-4 py-[11px] text-[13px]";
 const menuItemClass = "rounded-lg px-2 py-1.5 text-[13px]";
 
-export type RowAction = "test" | "pause" | "reconnect";
+export type RowAction = "test" | "pause" | "reconnect" | "default";
 
 type SourceHandler = (source: SendingSource) => void;
 
@@ -70,6 +70,7 @@ type SourcesTableProps = {
   onRename: SourceHandler;
   onSetLimit: SourceHandler;
   onTogglePause: SourceHandler;
+  onToggleDefault: SourceHandler;
   onDisconnect: SourceHandler;
   onReconnect: SourceHandler;
 };
@@ -82,6 +83,7 @@ export function SourcesTable({
   onRename,
   onSetLimit,
   onTogglePause,
+  onToggleDefault,
   onDisconnect,
   onReconnect,
 }: SourcesTableProps) {
@@ -105,6 +107,7 @@ export function SourcesTable({
           const rowBusy = busy?.id === source.id ? busy.action : null;
           const testing = rowBusy === "test";
           const reconnecting = rowBusy === "reconnect";
+          const menuBusy = rowBusy === "pause" || rowBusy === "default";
           const sent = countFormat.format(source.sentToday);
           const nearLimit = isNearLimit(source);
           const status = sourceStatusView(source);
@@ -121,8 +124,15 @@ export function SourcesTable({
                     className="bg-card"
                   />
                   <div className="min-w-0">
-                    <div className="truncate font-medium text-foreground">
-                      {source.name}
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-medium text-foreground">
+                        {source.name}
+                      </span>
+                      {source.isDefault ? (
+                        <span className="inline-flex h-[18px] shrink-0 items-center rounded-[5px] bg-border-subtle px-1.5 text-[11px] font-medium whitespace-nowrap text-muted-foreground">
+                          {copy.connected.defaultBadge}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="truncate text-xs text-ink-tertiary">
                       {sourceSecondLine(source)}
@@ -225,8 +235,8 @@ export function SourcesTable({
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       aria-label={copy.connected.actionsFor(source.name)}
-                      disabled={rowBusy === "pause"}
-                      aria-busy={rowBusy === "pause" || undefined}
+                      disabled={menuBusy}
+                      aria-busy={menuBusy || undefined}
                       render={
                         <Button
                           variant="ghost"
@@ -238,7 +248,7 @@ export function SourcesTable({
                         />
                       }
                     >
-                      {rowBusy === "pause" ? (
+                      {menuBusy ? (
                         <Spinner />
                       ) : (
                         <Ellipsis aria-hidden strokeWidth={1.6} />
@@ -294,6 +304,20 @@ export function SourcesTable({
                             : copy.connected.pause}
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuItem
+                        className={menuItemClass}
+                        disabled={rowBusy !== null}
+                        onClick={() => onToggleDefault(source)}
+                      >
+                        {source.isDefault ? (
+                          <StarOff aria-hidden strokeWidth={1.6} />
+                        ) : (
+                          <Star aria-hidden strokeWidth={1.6} />
+                        )}
+                        {source.isDefault
+                          ? copy.connected.removeDefault
+                          : copy.connected.makeDefault}
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         variant="destructive"
