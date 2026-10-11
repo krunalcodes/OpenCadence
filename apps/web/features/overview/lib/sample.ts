@@ -92,6 +92,19 @@ export const cadenceLegend: { state: CadenceEventState; label: string }[] = [
   { state: "scheduled", label: "Scheduled" },
 ];
 
+export const warmupLaneId = "warm-up";
+
+export const warmupLaneEndHour = 20;
+
+export function warmupLaneLabel(
+  mailboxes: number,
+  sent: number,
+  target: number,
+) {
+  const count = `${mailboxes} ${mailboxes === 1 ? "mailbox" : "mailboxes"}`;
+  return `${count}, ${sent} of ${target} sent`;
+}
+
 export const cadenceLanes: CadenceLane[] = [
   {
     id: "campaigns",
@@ -161,17 +174,9 @@ export const cadenceLanes: CadenceLane[] = [
     ],
   },
   {
-    id: "warm-up",
+    id: warmupLaneId,
     label: "Warm-up",
-    events: [
-      {
-        id: "warm-up-mailboxes",
-        label: "4 mailboxes, 96 of 160 sent",
-        start: 6,
-        end: 18,
-        state: "warmup",
-      },
-    ],
+    events: [],
   },
 ];
 
@@ -357,4 +362,5 @@ export const mailboxRows: MailboxRow[] = [
   },
 ];
 
-export const sampleNotice = "All figures on this screen are sample data.";
+export const sampleNotice =
+  "Figures on this screen are sample data, except the warm-up lane, which shows this workspace's real warm-up today.";

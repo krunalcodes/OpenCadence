@@ -16,6 +16,8 @@ import {
   findActivePage,
   findPage,
   isNestedPage,
+  type ViewCounts,
+  withViewCounts,
 } from "@/lib/navigation";
 import type { Workspace } from "@/lib/session";
 
@@ -42,6 +44,7 @@ type AppShellProps = {
   workspace: Workspace;
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
+  viewCounts?: ViewCounts;
   children: React.ReactNode;
 };
 
@@ -50,6 +53,7 @@ export function AppShell({
   workspace,
   workspaces,
   activeWorkspaceId,
+  viewCounts,
   children,
 }: AppShellProps) {
   const pathname = usePathname();
@@ -162,7 +166,8 @@ export function AppShell({
     return <>{children}</>;
   }
 
-  const { area, page } = current;
+  const { page } = current;
+  const area = withViewCounts(current.area, viewCounts ?? {});
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background text-[13px] text-foreground leading-normal">

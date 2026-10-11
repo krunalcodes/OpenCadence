@@ -1,5 +1,6 @@
 import {
   type CadenceEventState,
+  type CadenceLane,
   CadenceTimeline,
 } from "@workspace/ui/blocks/cadence-timeline";
 import { cn } from "@workspace/ui/lib/utils";
@@ -20,6 +21,9 @@ import {
   sampleNotice,
   sendsCard,
   todaySends,
+  warmupLaneEndHour,
+  warmupLaneId,
+  warmupLaneLabel,
 } from "@/features/overview/lib/sample";
 import { appHref } from "@/lib/navigation";
 
@@ -30,11 +34,44 @@ const legendSwatches: Record<CadenceEventState, string> = {
   warmup: "bg-warmup-surface",
 };
 
-type OverviewScreenProps = {
-  firstName: string;
+type OverviewWarmup = {
+  active: number;
+  todaySent: number;
+  todayTarget: number;
 };
 
-export function OverviewScreen({ firstName }: OverviewScreenProps) {
+type OverviewScreenProps = {
+  firstName: string;
+  warmup: OverviewWarmup | null;
+};
+
+function lanesWith(warmup: OverviewWarmup | null): CadenceLane[] {
+  return cadenceLanes.map((lane) =>
+    lane.id === warmupLaneId
+      ? {
+          ...lane,
+          events:
+            warmup && warmup.active > 0
+              ? [
+                  {
+                    id: "warm-up-mailboxes",
+                    label: warmupLaneLabel(
+                      warmup.active,
+                      warmup.todaySent,
+                      warmup.todayTarget,
+                    ),
+                    start: cadenceCard.startHour,
+                    end: warmupLaneEndHour,
+                    state: "warmup" as const,
+                  },
+                ]
+              : [],
+        }
+      : lane,
+  );
+}
+
+export function OverviewScreen({ firstName, warmup }: OverviewScreenProps) {
   return (
     <div className="@container flex min-w-0 flex-col gap-[18px] text-[13px] leading-normal">
       <OverviewSummary firstName={firstName}>
@@ -66,7 +103,7 @@ export function OverviewScreen({ firstName }: OverviewScreenProps) {
           startHour={cadenceCard.startHour}
           endHour={cadenceCard.endHour}
           now={cadenceCard.now}
-          lanes={cadenceLanes}
+          lanes={lanesWith(warmup)}
         />
       </OverviewCard>
 

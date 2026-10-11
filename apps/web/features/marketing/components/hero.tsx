@@ -163,7 +163,7 @@ const lanes: {
         kind: "warmup",
         left: 0,
         width: 75,
-        label: "4 mailboxes, 96 of 160 sent",
+        label: "4 mailboxes, 50 of 84 sent",
       },
     ],
   },
@@ -391,10 +391,10 @@ function Sidebar() {
       <div className="mt-auto rounded-[10px] border border-border bg-card p-3 shadow-xs">
         <span className="block font-semibold">Warm-up in progress</span>
         <span className="mt-0.5 mb-2 block text-muted-foreground text-xs tabular-nums">
-          4 mailboxes, day 12 of 21
+          4 mailboxes, day 9 of 14
         </span>
         <span className="block h-[5px] overflow-hidden rounded-full bg-border-subtle">
-          <span className="block h-full w-[57%] rounded-full bg-primary" />
+          <span className="block h-full w-[64%] rounded-full bg-primary" />
         </span>
       </div>
     </div>

@@ -120,6 +120,48 @@ export class SendingSourcesController {
     return this.sources.connectResend(actorOf(workspace), { name, apiKey });
   }
 
+  @Post("imap-smtp")
+  @WorkspaceAuth("session", "apiKey")
+  @ApiOperation({
+    summary: "Connect a mailbox over IMAP and SMTP",
+    description:
+      "Signs in to both servers to check the details, then stores them encrypted. Most providers need an app password.",
+  })
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: [
+        "email",
+        "password",
+        "smtpHost",
+        "smtpPort",
+        "smtpSecurity",
+        "imapHost",
+        "imapPort",
+        "imapSecurity",
+      ],
+      properties: {
+        email: { type: "string", format: "email" },
+        username: { type: "string" },
+        password: { type: "string" },
+        name: { type: "string", maxLength: 80 },
+        smtpHost: { type: "string" },
+        smtpPort: { type: "integer" },
+        smtpSecurity: { type: "string", enum: ["tls", "starttls"] },
+        imapHost: { type: "string" },
+        imapPort: { type: "integer" },
+        imapSecurity: { type: "string", enum: ["tls", "starttls"] },
+        dailySendLimit: { type: "integer", minimum: 1 },
+      },
+    },
+  })
+  connectImapSmtp(
+    @CurrentWorkspace() workspace: WorkspaceAuthContext,
+    @Body() input: unknown,
+  ) {
+    return this.sources.connectImapSmtp(actorOf(workspace), body(input));
+  }
+
   @Post("gmail/authorize")
   @HttpCode(200)
   @WorkspaceAuth("session")

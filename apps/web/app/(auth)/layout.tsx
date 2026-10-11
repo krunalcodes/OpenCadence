@@ -41,7 +41,7 @@ const lanes: { name: string; sends: Send[] }[] = [
     name: "Warm-up",
     sends: [
       {
-        label: "4 mailboxes, 96 of 160 sent",
+        label: "4 mailboxes, 50 of 84 sent",
         start: 8,
         end: 14,
         state: "warmup",

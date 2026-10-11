@@ -14,7 +14,7 @@ import { mountQueueBoard } from "./infra/queue/queue-board.mount";
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(),
+    new FastifyAdapter({ bodyLimit: 4 * 1024 * 1024 }),
     { bodyParser: false },
   );
 

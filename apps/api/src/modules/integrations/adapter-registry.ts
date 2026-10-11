@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { IntegrationAdapter } from "@workspace/integration-core";
 import { createGmailAdapter } from "@workspace/integration-gmail";
+import { createImapSmtpAdapter } from "@workspace/integration-imap-smtp";
 import { createResendAdapter } from "@workspace/integration-resend";
 import type { Env } from "../../config/env";
 
@@ -11,6 +12,7 @@ export class AdapterRegistry {
 
   constructor(@Inject(ConfigService) config: ConfigService<Env, true>) {
     this.add(createResendAdapter({ userAgent: "OpenCadence" }));
+    this.add(createImapSmtpAdapter());
 
     const clientId = config.get("GMAIL_CLIENT_ID", { infer: true });
     const clientSecret = config.get("GMAIL_CLIENT_SECRET", { infer: true });

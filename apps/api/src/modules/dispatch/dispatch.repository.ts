@@ -159,7 +159,10 @@ export class DispatchRepository {
             : undefined,
         ),
       )
-      .orderBy(desc(messages.createdAt), desc(messages.id))
+      .orderBy(
+        sql`${messages.createdAt} desc nulls last`,
+        sql`${messages.id} desc nulls last`,
+      )
       .limit(query.limit);
     return rows.map((row) => this.flatten(row));
   }

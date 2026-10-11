@@ -29,7 +29,7 @@ import {
 } from "@workspace/ui/components/toggle-group";
 import { cn } from "@workspace/ui/lib/utils";
 import { ArrowLeft, ChevronRight, Info } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, Fragment, useRef, useState } from "react";
 import { toast } from "sonner";
 import { focusRing } from "@/components/app-shell/page-header";
 import { SourceMark } from "@/components/product/source-mark";
@@ -53,11 +53,16 @@ import {
   securityOptions,
   sesRegions,
 } from "@/features/integrations/lib/catalog";
-import { copy, describeError } from "@/features/integrations/lib/copy";
+import {
+  copy,
+  describeError,
+  describeMailboxError,
+} from "@/features/integrations/lib/copy";
 import type { SendingSource } from "@/features/integrations/lib/sources";
 import {
   type ApiError,
   authorizeGmail,
+  connectMailbox,
   connectResend,
 } from "@/features/integrations/queries/mutations";
 import { useOrigin } from "@/hooks/use-hydrated";
@@ -73,6 +78,8 @@ function initialValues(integration: Integration) {
   for (const field of integration.fields) {
     if (field.kind === "security") {
       values[field.id] = securityOptions[0]?.value ?? "";
+    } else if (field.kind === "preset") {
+      values[field.id] = field.presets[0]?.value ?? "";
     } else if (field.kind === "region") {
       values[field.id] = "";
     } else {
@@ -83,7 +90,7 @@ function initialValues(integration: Integration) {
 }
 
 function validateField(field: ConnectField, raw: string) {
-  if (field.kind === "security") {
+  if (field.kind === "security" || field.kind === "preset") {
     return undefined;
   }
   const value = field.kind === "password" ? raw : raw.trim();
@@ -107,9 +114,8 @@ function validateField(field: ConnectField, raw: string) {
 }
 
 const apiFieldIds: Record<string, string> = {
-  name: "name",
-  apiKey: "apiKey",
   dailySendLimit: "dailyLimit",
+  email: "address",
 };
 
 const errorFieldIds: Record<string, string> = {
@@ -117,8 +123,24 @@ const errorFieldIds: Record<string, string> = {
   invalid_credentials: "apiKey",
 };
 
-function fieldOfError(error: ApiError) {
-  return errorFieldIds[error.code] ?? apiFieldIds[error.field ?? ""] ?? null;
+function fieldOfError(error: ApiError, integration: Integration) {
+  const known = (id: string | null | undefined) =>
+    id && integration.fields.some((field) => field.id === id) ? id : null;
+  const named = error.field ? (apiFieldIds[error.field] ?? error.field) : null;
+  const nameTaken = error.field === "name" || error.code === "name_taken";
+  return (
+    known(named) ??
+    known(errorFieldIds[error.code]) ??
+    (nameTaken ? known("address") : null)
+  );
+}
+
+function isServerField(field: ConnectField) {
+  return "server" in field && field.server === true;
+}
+
+function securityOf(value: string | undefined) {
+  return value === "starttls" ? "starttls" : "tls";
 }
 
 type ConnectSheetProps = {
@@ -246,9 +268,33 @@ function ConnectForm({
 }: ConnectFormProps) {
   const [values, setValues] = useState(() => initialValues(integration));
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  const typed = useRef(new Set<string>());
+
+  const presetField = integration.fields.find(
+    (field) => field.kind === "preset",
+  );
+  const preset =
+    presetField?.presets.find(
+      (item) => item.value === values[presetField.id],
+    ) ?? null;
+  const presetValues = preset?.values ?? null;
+  const visibleFields = integration.fields.filter(
+    (field) => presetValues === null || !isServerField(field),
+  );
 
   function update(field: ConnectField, value: string) {
-    setValues((current) => ({ ...current, [field.id]: value }));
+    if (field.kind !== "security" && field.kind !== "preset") {
+      typed.current.add(field.id);
+    }
+    const port =
+      field.kind === "security" && field.port ? field.port : undefined;
+    const portValue =
+      port && !typed.current.has(port.field) ? port.byValue[value] : undefined;
+    setValues((current) => ({
+      ...current,
+      [field.id]: value,
+      ...(port && portValue !== undefined ? { [port.field]: portValue } : {}),
+    }));
     if (errors[field.id]) {
       setErrors((current) => ({
         ...current,
@@ -257,12 +303,36 @@ function ConnectForm({
     }
   }
 
-  function showFailure(error: ApiError) {
-    const message = describeError(error);
-    const fieldId = fieldOfError(error);
-    if (fieldId && integration.fields.some((field) => field.id === fieldId)) {
-      setErrors((current) => ({ ...current, [fieldId]: message }));
+  function focusField(fieldId: string) {
+    window.requestAnimationFrame(() => {
       document.getElementById(fieldDomId(fieldId))?.focus();
+    });
+  }
+
+  function showFailure(error: ApiError) {
+    const message =
+      integration.id === "imap-smtp"
+        ? describeMailboxError(error)
+        : describeError(error);
+    const fieldId = fieldOfError(error, integration);
+    if (fieldId) {
+      const target = integration.fields.find((field) => field.id === fieldId);
+      const manual = presetField?.presets.find((item) => item.values === null);
+      if (
+        target &&
+        presetField &&
+        presetValues &&
+        manual &&
+        isServerField(target)
+      ) {
+        setValues((current) => ({
+          ...current,
+          ...presetValues,
+          [presetField.id]: manual.value,
+        }));
+      }
+      setErrors((current) => ({ ...current, [fieldId]: message }));
+      focusField(fieldId);
       return;
     }
     toast.error(copy.sheet.connectFailed(integration.name), {
@@ -284,6 +354,28 @@ function ConnectForm({
       showFailure(result.error);
       return;
     }
+    if (integration.id === "imap-smtp") {
+      const sent = { ...values, ...presetValues };
+      const limit = (sent.dailyLimit ?? "").trim();
+      const result = await connectMailbox({
+        email: (sent.address ?? "").trim(),
+        password: sent.password ?? "",
+        smtpHost: (sent.smtpHost ?? "").trim(),
+        smtpPort: Number(sent.smtpPort),
+        smtpSecurity: securityOf(sent.smtpSecurity),
+        imapHost: (sent.imapHost ?? "").trim(),
+        imapPort: Number(sent.imapPort),
+        imapSecurity: securityOf(sent.imapSecurity),
+        ...(limit === "" ? {} : { dailySendLimit: Number(limit) }),
+      });
+      onPendingChange(false);
+      if (result.ok) {
+        onConnected(result.data);
+        return;
+      }
+      showFailure(result.error);
+      return;
+    }
     const result = await connectResend({
       name: (values.name ?? "").trim(),
       apiKey: (values.apiKey ?? "").trim(),
@@ -302,11 +394,11 @@ function ConnectForm({
       return;
     }
     const next: Record<string, string | undefined> = {};
-    for (const field of integration.fields) {
+    for (const field of visibleFields) {
       next[field.id] = validateField(field, values[field.id] ?? "");
     }
     setErrors(next);
-    const firstInvalid = integration.fields.find((field) => next[field.id]);
+    const firstInvalid = visibleFields.find((field) => next[field.id]);
     if (firstInvalid) {
       document.getElementById(fieldDomId(firstInvalid.id))?.focus();
       return;
@@ -356,15 +448,29 @@ function ConnectForm({
           {integration.intro}
         </SheetDescription>
         <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-4">
-          {integration.fields.map((field) => (
-            <ConnectFieldControl
-              key={field.id}
-              field={field}
-              value={values[field.id] ?? ""}
-              error={errors[field.id]}
-              disabled={pending}
-              onChange={(value) => update(field, value)}
-            />
+          {visibleFields.map((field) => (
+            <Fragment key={field.id}>
+              <ConnectFieldControl
+                field={field}
+                value={values[field.id] ?? ""}
+                error={errors[field.id]}
+                disabled={pending}
+                onChange={(value) => update(field, value)}
+              />
+              {presetField?.noticeAfter === field.id && preset?.notice ? (
+                <p
+                  role="note"
+                  className="col-span-2 flex gap-2 rounded-lg bg-info-surface px-3 py-2.5 leading-normal text-foreground"
+                >
+                  <Info
+                    aria-hidden="true"
+                    strokeWidth={1.6}
+                    className="mt-0.5 size-4 shrink-0 text-info"
+                  />
+                  <span className="min-w-0">{preset.notice}</span>
+                </p>
+              ) : null}
+            </Fragment>
           ))}
         </div>
         {blocked ? <GmailSetupNotice /> : null}
@@ -439,14 +545,20 @@ function ConnectFieldControl({
   const id = fieldDomId(field.id);
   const span = "half" in field && field.half ? "col-span-1" : "col-span-2";
 
-  if (field.kind === "security") {
+  if (field.kind === "security" || field.kind === "preset") {
+    const options = field.kind === "preset" ? field.presets : securityOptions;
     return (
-      <Field className={span}>
-        <span className="text-[13px] leading-snug font-medium">
+      <Field data-invalid={error ? true : undefined} className={span}>
+        <span
+          id={`${id}-label`}
+          className="text-[13px] leading-snug font-medium"
+        >
           {field.label}
         </span>
         <ToggleGroup
-          aria-label={field.label}
+          id={id}
+          aria-labelledby={`${id}-label`}
+          aria-describedby={error ? `${id}-error` : undefined}
           value={[value]}
           disabled={disabled}
           onValueChange={(next) => {
@@ -456,7 +568,7 @@ function ConnectFieldControl({
           }}
           className={segmentedGroupClass}
         >
-          {securityOptions.map((option) => (
+          {options.map((option) => (
             <ToggleGroupItem
               key={option.value}
               value={option.value}
@@ -466,6 +578,11 @@ function ConnectFieldControl({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+        {error ? (
+          <FieldError id={`${id}-error`} className="text-[13px] text-danger">
+            {error}
+          </FieldError>
+        ) : null}
       </Field>
     );
   }

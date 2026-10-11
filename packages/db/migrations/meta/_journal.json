@@ -29,6 +29,20 @@
       "when": 1791708286399,
       "tag": "0003_silky_tombstone",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791710370152,
+      "tag": "0004_regular_katie_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791710552304,
+      "tag": "0005_cooing_the_hood",
+      "breakpoints": true
     }
   ]
 }

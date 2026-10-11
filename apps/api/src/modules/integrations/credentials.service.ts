@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type {
   Credentials,
   OAuthCredentials,
+  PasswordCredentials,
 } from "@workspace/integration-core";
 import { CryptoService } from "../../infra/crypto/crypto.service";
 import type {
@@ -40,6 +41,23 @@ export class CredentialsService {
       };
     }
 
+    if (credentials.kind === "password") {
+      return {
+        ...base,
+        authType: "password",
+        secretCiphertext: this.crypto.encrypt(
+          dataKey,
+          JSON.stringify({
+            username: credentials.username,
+            password: credentials.password,
+            smtp: credentials.smtp,
+            imap: credentials.imap,
+          }),
+          aad(sourceId, "secret"),
+        ),
+      };
+    }
+
     return {
       ...base,
       authType: "oauth2",
@@ -70,6 +88,11 @@ export class CredentialsService {
 
     if (row.authType === "api_key") {
       return { kind: "api_key", apiKey: secret };
+    }
+
+    if (row.authType === "password") {
+      const parsed = JSON.parse(secret) as Omit<PasswordCredentials, "kind">;
+      return { kind: "password", ...parsed };
     }
 
     return {

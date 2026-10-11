@@ -104,7 +104,8 @@ Turborepo monorepo on Bun workspaces (Bun 1.3+, Node 24+).
 - `packages/typescript-config`: shared tsconfig presets
 - `integrations/core`: the adapter interface every sending integration
   implements (`@workspace/integration-core`)
-- `integrations/gmail`, `integrations/resend`: sending adapters
+- `integrations/gmail`, `integrations/resend`, `integrations/imap-smtp`:
+  sending adapters
   (`@workspace/integration-<name>`)
 - `.agents/skills`: project agent skills (symlinked into `.claude/skills`)
 

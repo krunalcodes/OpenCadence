@@ -152,9 +152,10 @@ function DeliverabilityPage() {
             Inbox warm-up that ramps each mailbox gradually
           </h2>
           <p className={cn(lead, "min-w-0")}>
-            A new mailbox starts at a few emails a day and climbs on a 21-day
-            schedule. Each mailbox follows its own ramp, so the one you added
-            last week never sends at the volume of the one you added last month.
+            A new mailbox starts at 5 emails a day and adds a couple more each
+            day, reaching 30 a day in two weeks. Each mailbox follows its own
+            ramp, so the one you added last week never sends at the volume of
+            the one you added last month.
           </p>
         </div>
         <div className="mt-12">

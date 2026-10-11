@@ -15,7 +15,24 @@ export type ApiKeyCredentials = {
   apiKey: string;
 };
 
-export type Credentials = OAuthCredentials | ApiKeyCredentials;
+export type MailServer = {
+  host: string;
+  port: number;
+  security: "tls" | "starttls";
+};
+
+export type PasswordCredentials = {
+  kind: "password";
+  username: string;
+  password: string;
+  smtp: MailServer;
+  imap: MailServer;
+};
+
+export type Credentials =
+  | OAuthCredentials
+  | ApiKeyCredentials
+  | PasswordCredentials;
 
 export type AuthKind = Credentials["kind"];
 
@@ -138,6 +155,62 @@ export type WebhookSupport = {
   parse(request: WebhookRequest): ProviderEvent;
 };
 
+export type InboxMessageRef = {
+  providerMessageId: string;
+  providerThreadId?: string;
+  folder?: string;
+};
+
+export type InboxMessage = InboxMessageRef & {
+  messageId?: string;
+  inReplyTo?: string;
+  references: string[];
+  from?: MessageAddress;
+  to: MessageAddress[];
+  subject?: string;
+  receivedAt: Date;
+  flags: {
+    isSpam: boolean;
+    isUnread: boolean;
+    isInInbox: boolean;
+    isStarred: boolean;
+    isImportant?: boolean;
+  };
+};
+
+export type InboxSearch = {
+  messageId: string;
+  since: Date;
+  includeSpam: boolean;
+};
+
+export type InboxAction =
+  | { type: "markRead" }
+  | { type: "markImportant" }
+  | { type: "star" }
+  | { type: "notSpam" }
+  | { type: "fileUnder"; folder: InboxFolder };
+
+export type InboxFolder = { providerFolderId: string; name: string };
+
+export type InboxActionResult = {
+  ref: InboxMessageRef;
+  unsupported: InboxAction["type"][];
+};
+
+export type InboxSupport = {
+  search(
+    credentials: Credentials,
+    query: InboxSearch,
+  ): Promise<InboxMessage | null>;
+  applyActions(
+    credentials: Credentials,
+    ref: InboxMessageRef,
+    actions: InboxAction[],
+  ): Promise<InboxActionResult>;
+  ensureFolder(credentials: Credentials, name: string): Promise<InboxFolder>;
+};
+
 export type IntegrationAdapter = {
   type: string;
   name: string;
@@ -147,4 +220,5 @@ export type IntegrationAdapter = {
   send(credentials: Credentials, message: OutboundMessage): Promise<SendResult>;
   oauth?: OAuthSupport;
   webhooks?: WebhookSupport;
+  inbox?: InboxSupport;
 };

@@ -6,6 +6,7 @@ import {
   getWorkspaces,
   requireSession,
 } from "@/lib/session";
+import { getWarmupSummary } from "@/lib/warmup-summary";
 
 type AppLayoutProps = {
   children: React.ReactNode;
@@ -13,9 +14,10 @@ type AppLayoutProps = {
 
 export default async function AppLayout({ children }: AppLayoutProps) {
   const session = await requireSession();
-  const [workspaces, workspace] = await Promise.all([
+  const [workspaces, workspace, warmup] = await Promise.all([
     getWorkspaces(),
     getActiveWorkspace(),
+    getWarmupSummary(),
   ]);
   const user = {
     name: session.user.name || session.user.email,
@@ -33,6 +35,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
       workspace={workspace}
       workspaces={workspaces}
       activeWorkspaceId={session.session.activeOrganizationId ?? null}
+      viewCounts={{ "warming-up": warmup?.warming }}
     >
       {children}
     </AppShell>

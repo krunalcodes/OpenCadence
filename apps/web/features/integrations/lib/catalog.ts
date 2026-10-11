@@ -31,6 +31,13 @@ export function formatFeatures(ids: Feature[]) {
 
 export type Option = { value: string; label: string };
 
+export type Preset = {
+  value: string;
+  label: string;
+  values: Record<string, string> | null;
+  notice?: string;
+};
+
 export type ConnectField =
   | {
       id: string;
@@ -44,9 +51,24 @@ export type ConnectField =
       half?: boolean;
       max?: number;
       optional?: boolean;
+      server?: boolean;
     }
   | { id: string; kind: "region"; label: string; hint: string; missing: string }
-  | { id: string; kind: "security"; label: string; half?: boolean };
+  | {
+      id: string;
+      kind: "security";
+      label: string;
+      half?: boolean;
+      server?: boolean;
+      port?: { field: string; byValue: Record<string, string> };
+    }
+  | {
+      id: string;
+      kind: "preset";
+      label: string;
+      presets: Preset[];
+      noticeAfter: string;
+    };
 
 export type { IntegrationMark };
 
@@ -125,17 +147,41 @@ export const integrations: Integration[] = [
     id: "imap-smtp",
     name: "IMAP/SMTP",
     mark: null,
-    summary: "Any other mailbox, using the details from your email host.",
+    summary:
+      "Any mailbox that takes a password or an app password, Gmail included.",
     features: inboxFeatures,
     intro:
-      "SMTP sends the email and IMAP reads the replies. Your email host lists both sets of details in its help pages. Use an app password if the host offers one.",
+      "SMTP sends the email and IMAP reads the replies. Pick Gmail to fill in the servers, or pick Other and use the details from your email host's help pages. Use an app password if the host offers one.",
     fields: [
       addressField,
       {
         id: "password",
         kind: "password",
         label: "Password or app password",
-        missing: "Enter the password for this mailbox.",
+        missing: "Enter the password or app password for this mailbox.",
+      },
+      {
+        id: "provider",
+        kind: "preset",
+        label: "Provider",
+        noticeAfter: "password",
+        presets: [
+          {
+            value: "gmail",
+            label: "Gmail",
+            values: {
+              smtpHost: "smtp.gmail.com",
+              smtpPort: "465",
+              smtpSecurity: "tls",
+              imapHost: "imap.gmail.com",
+              imapPort: "993",
+              imapSecurity: "tls",
+            },
+            notice:
+              "Google does not accept your normal password here. Create an app password in your Google Account, which needs 2-Step Verification to be on, and make sure IMAP access is allowed for the account.",
+          },
+          { value: "other", label: "Other", values: null },
+        ],
       },
       {
         id: "smtpHost",
@@ -145,6 +191,7 @@ export const integrations: Integration[] = [
         missing: "Enter the outgoing server, such as smtp.yourdomain.com.",
         mono: true,
         half: true,
+        server: true,
       },
       {
         id: "smtpPort",
@@ -153,6 +200,14 @@ export const integrations: Integration[] = [
         missing: "Enter the port. Most hosts use 465 or 587.",
         defaultValue: "465",
         half: true,
+        server: true,
+      },
+      {
+        id: "smtpSecurity",
+        kind: "security",
+        label: "SMTP encryption",
+        server: true,
+        port: { field: "smtpPort", byValue: { tls: "465", starttls: "587" } },
       },
       {
         id: "imapHost",
@@ -162,6 +217,7 @@ export const integrations: Integration[] = [
         missing: "Enter the incoming server, such as imap.yourdomain.com.",
         mono: true,
         half: true,
+        server: true,
       },
       {
         id: "imapPort",
@@ -170,12 +226,18 @@ export const integrations: Integration[] = [
         missing: "Enter the port. Most hosts use 993.",
         defaultValue: "993",
         half: true,
+        server: true,
       },
-      { id: "security", kind: "security", label: "Encryption", half: true },
-      dailyLimitField,
+      {
+        id: "imapSecurity",
+        kind: "security",
+        label: "IMAP encryption",
+        server: true,
+      },
+      { ...dailyLimitField, defaultValue: "40" },
     ],
     submitLabel: "Test and connect",
-    available: false,
+    available: true,
   },
   {
     id: "resend",

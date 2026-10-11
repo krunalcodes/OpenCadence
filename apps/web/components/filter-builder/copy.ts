@@ -1,0 +1,130 @@
+import type {
+  DateField,
+  FilterMatch,
+  FilterOp,
+  TextField,
+} from "@/components/filter-builder/types";
+
+const countFormat = new Intl.NumberFormat("en-US");
+
+const builtInFields: Record<
+  TextField | DateField | "list" | "tag" | "suppressed",
+  string
+> = {
+  email: "Email",
+  firstName: "First name",
+  lastName: "Last name",
+  company: "Company",
+  jobTitle: "Job title",
+  phone: "Phone",
+  city: "City",
+  country: "Country",
+  timezone: "Time zone",
+  createdAt: "Added",
+  updatedAt: "Updated",
+  list: "List",
+  tag: "Tag",
+  suppressed: "On the suppression list",
+};
+
+const operators: Record<FilterOp, string> = {
+  is: "is",
+  is_not: "is not",
+  contains: "contains",
+  not_contains: "does not contain",
+  starts_with: "starts with",
+  ends_with: "ends with",
+  is_set: "has a value",
+  is_not_set: "has no value",
+  gt: "is greater than",
+  gte: "is at least",
+  lt: "is less than",
+  lte: "is at most",
+  before: "is before",
+  after: "is after",
+  in_last_days: "is in the last",
+  not_in_last_days: "is not in the last",
+  is_true: "is true",
+  is_false: "is false",
+  in: "is a member of",
+  not_in: "is not a member of",
+  subscribed_to: "is subscribed to",
+  unsubscribed_from: "has unsubscribed from",
+  has: "has the tag",
+  has_not: "does not have the tag",
+};
+
+const matchOptions: Record<FilterMatch, string> = { all: "All", any: "Any" };
+
+export const copy = {
+  matchLead: "Match",
+  matchTail: "of the following",
+  groupTail: "of these",
+  matchOptions,
+  matchLabel: "Match all or any of the following",
+  groupMatchLabel: (group: number) =>
+    `Match all or any of the conditions in group ${group}`,
+  groupLabel: (group: number) => `Group ${group}`,
+  fieldGroups: {
+    contact: "Contact fields",
+    custom: "Custom fields",
+    activity: "Activity",
+    membership: "Membership",
+    deliverability: "Deliverability",
+  },
+  builtInFields,
+  operators,
+  fieldLabel: (row: number) => `Field for condition ${row}`,
+  fieldPlaceholder: "Choose a field",
+  fieldEmpty: "No field matches. Clear the box to see all.",
+  operatorLabel: (row: number) => `Operator for condition ${row}`,
+  operatorPlaceholder: "Choose an operator",
+  operatorEmpty: "No operator matches. Clear the box to see all.",
+  valueLabel: (row: number) => `Value for condition ${row}`,
+  daysLabel: (row: number) => `Number of days for condition ${row}`,
+  dateLabel: (row: number) => `Date for condition ${row}`,
+  listLabel: (row: number) => `List for condition ${row}`,
+  tagLabel: (row: number) => `Tag for condition ${row}`,
+  textPlaceholder: "Value",
+  numberPlaceholder: "Number",
+  daysSuffix: "days",
+  listPlaceholder: "Choose a list",
+  listEmpty: "No list matches.",
+  noLists: "This workspace has no lists yet.",
+  tagPlaceholder: "Choose a tag",
+  tagEmpty: "No tag matches.",
+  noTags: "This workspace has no tags yet.",
+  optionPlaceholder: "Choose an option",
+  optionEmpty: "No option matches.",
+  removeCondition: (row: number) => `Remove condition ${row}`,
+  removeGroup: (group: number) => `Remove group ${group}`,
+  addCondition: "Add condition",
+  addConditionToGroup: (group: number) => `Add condition to group ${group}`,
+  addGroup: "Add group",
+  noConditions: "No conditions yet. Add one to start filtering.",
+  limit: (max: number) =>
+    `A filter can have up to ${max} conditions. Remove one to add another.`,
+  problems: {
+    field:
+      "This custom field no longer exists. Choose another field or remove the condition.",
+    list: "This list no longer exists. Choose another list or remove the condition.",
+    tag: "This tag no longer exists. Choose another tag or remove the condition.",
+    days: (max: number) =>
+      `Enter a whole number of days from 1 to ${countFormat.format(max)}.`,
+  },
+  summary: {
+    empty: "No conditions",
+    and: " and ",
+    or: " or ",
+    quoted: (value: string) => `"${value}"`,
+    days: (count: number) =>
+      `${countFormat.format(count)} ${count === 1 ? "day" : "days"}`,
+    number: (value: number) => String(value),
+    missingValue: "(no value)",
+    missingField: (key: string) => `${key} (deleted field)`,
+    missingList: "a deleted list",
+    missingTag: "a deleted tag",
+    suppressed: "is on the suppression list",
+    notSuppressed: "is not on the suppression list",
+  },
+};

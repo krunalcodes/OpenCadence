@@ -32,6 +32,7 @@
     "@workspace/email": "workspace:*",
     "@workspace/integration-core": "workspace:*",
     "@workspace/integration-gmail": "workspace:*",
+    "@workspace/integration-imap-smtp": "workspace:*",
     "@workspace/integration-resend": "workspace:*",
     "bullmq": "^6.3.12",
     "ioredis": "^6.0.0",

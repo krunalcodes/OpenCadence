@@ -3,7 +3,6 @@ import {
   and,
   asc,
   type Db,
-  desc,
   eq,
   gte,
   inArray,
@@ -370,8 +369,8 @@ export class SendingSourcesRepository {
         ),
       )
       .orderBy(
-        desc(sendingSourceEvents.createdAt),
-        desc(sendingSourceEvents.id),
+        sql`${sendingSourceEvents.createdAt} desc nulls last`,
+        sql`${sendingSourceEvents.id} desc nulls last`,
       )
       .limit(query.limit);
   }

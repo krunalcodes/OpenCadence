@@ -12,6 +12,8 @@ import { focusRing } from "@/components/app-shell/page-header";
 
 const separators = /[\s,;]+/;
 const commitKeys = new Set(["Enter", "Tab", ",", ";", " "]);
+const phraseSeparators = /\s*[,;\n\t]+\s*/;
+const phraseCommitKeys = new Set(["Enter", "Tab", ",", ";"]);
 
 type TokenInputProps = {
   id: string;
@@ -28,6 +30,7 @@ type TokenInputProps = {
   invalid?: boolean;
   describedBy?: string;
   inputMode?: "text" | "email" | "url";
+  allowSpaces?: boolean;
 };
 
 export function TokenInput({
@@ -45,15 +48,18 @@ export function TokenInput({
   invalid,
   describedBy,
   inputMode = "text",
+  allowSpaces = false,
 }: TokenInputProps) {
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const splitter = allowSpaces ? phraseSeparators : separators;
+  const committers = allowSpaces ? phraseCommitKeys : commitKeys;
 
   function commit(raw: string) {
     const seen = new Set(tokens);
     const next = [...tokens];
     let dropped = 0;
-    for (const part of raw.split(separators)) {
+    for (const part of raw.split(splitter)) {
       const token = normalize ? normalize(part) : part.trim();
       if (token === "" || seen.has(token)) {
         continue;
@@ -83,7 +89,7 @@ export function TokenInput({
     if (event.nativeEvent.isComposing) {
       return;
     }
-    if (commitKeys.has(event.key)) {
+    if (committers.has(event.key)) {
       if (draft.trim() !== "") {
         if (event.key !== "Tab") {
           event.preventDefault();
@@ -102,7 +108,7 @@ export function TokenInput({
 
   function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
     const pasted = event.clipboardData.getData("text");
-    if (!separators.test(pasted.trim())) {
+    if (!splitter.test(pasted.trim())) {
       return;
     }
     event.preventDefault();
@@ -164,7 +170,7 @@ export function TokenInput({
         aria-describedby={describedBy}
         onChange={(event) => {
           const { value } = event.target;
-          if (separators.test(value)) {
+          if (splitter.test(value)) {
             commit(value);
           } else {
             setDraft(value);

@@ -32,18 +32,15 @@ const dkimName = "oc1._domainkey.getnorthwind.co";
 const dkimValue =
   "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx7Qm2fT9cLr4Wn1pKzVb3HsYd8uEoJ5gXa";
 
-const rampVolumes = [
-  5, 8, 11, 15, 18, 21, 24, 27, 31, 34, 37, 40, 43, 47, 50, 53, 56, 59, 63, 66,
-  70,
-];
+const rampVolumes = [5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 30];
 const rampDays = rampVolumes.length;
-const rampToday = 12;
-const rampPeak = 70;
+const rampToday = 9;
+const rampPeak = 30;
 
 const rampStats = [
-  { label: "Schedule", value: "Day 12 of 21" },
-  { label: "Today", value: "40 per mailbox" },
-  { label: "Target", value: "70 per mailbox" },
+  { label: "Schedule", value: "Day 9 of 14" },
+  { label: "Today", value: "21 per mailbox" },
+  { label: "Target", value: "30 per mailbox" },
   { label: "Warming", value: "4 mailboxes" },
 ];
 
@@ -53,13 +50,13 @@ const rampMailboxes: {
   note: string;
   paused?: boolean;
 }[] = [
-  { address: "maya@northwind.studio", day: 12, note: "40 a day" },
-  { address: "sam@northwind.studio", day: 12, note: "40 a day" },
-  { address: "priya@northwind.studio", day: 9, note: "31 a day" },
+  { address: "maya@northwind.studio", day: 9, note: "21 a day" },
+  { address: "sam@northwind.studio", day: 9, note: "21 a day" },
+  { address: "priya@northwind.studio", day: 6, note: "15 a day" },
   {
     address: "outreach@getnorthwind.co",
-    day: 10,
-    note: "Paused at 34 a day",
+    day: 7,
+    note: "Paused at 17 a day",
     paused: true,
   },
 ];
@@ -364,7 +361,7 @@ function WarmupRamp() {
       <div className="px-4 pt-6 pb-4 md:px-5 md:pt-8">
         <div
           role="img"
-          aria-label="Daily warm-up volume per mailbox over 21 days, rising from 5 emails on day 1 to 70 on day 21. Today is day 12 at 40 emails."
+          aria-label="Daily warm-up volume per mailbox over 14 days, rising from 5 emails on day 1 to 30 on day 14. Today is day 9 at 21 emails."
           className="flex h-36 items-end gap-[3px] sm:gap-1.5 md:h-52"
         >
           {rampVolumes.map((volume, index) => {
@@ -392,9 +389,9 @@ function WarmupRamp() {
             className="absolute -translate-x-1/2 whitespace-nowrap font-medium text-primary"
             style={{ left: `${((rampToday - 0.5) / rampDays) * 100}%` }}
           >
-            Day 12
+            Day 9
           </span>
-          <span className="absolute right-0">Day 21, 70</span>
+          <span className="absolute right-0">Day 14, 30</span>
         </div>
       </div>
 

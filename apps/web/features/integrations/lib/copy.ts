@@ -57,7 +57,7 @@ export const copy = {
     clear: "Clear search",
     emptyTitle: "No sending sources yet",
     emptyBody:
-      "Connect a Gmail mailbox or a Resend account. More source types are on the way.",
+      "Connect a Gmail mailbox, any mailbox over IMAP/SMTP, or a Resend account. More source types are on the way.",
   },
   status: {
     healthy: "Healthy",
@@ -67,6 +67,9 @@ export const copy = {
     byCode: {
       auth_revoked: "Reconnect needed",
       invalid_credentials: "Key rejected",
+    } as Record<string, string>,
+    mailboxByCode: {
+      invalid_credentials: "Sign-in failed",
     } as Record<string, string>,
     noDetail: "The provider did not give a reason. Run a connection test.",
     detailFor: (label: string, detail: string) => `${label}: ${detail}`,
@@ -178,6 +181,16 @@ export const copy = {
         "Google no longer accepts the saved access for this mailbox. Reconnect it to continue.",
     } as Record<string, string>,
   },
+  mailboxErrors: {
+    name_taken:
+      "A source with this name already exists. This mailbox may already be connected.",
+    invalid_credentials:
+      "The mail server refused this password. If your email host offers app passwords, create one and use it here.",
+    blocked_by_policy:
+      "The email provider has IMAP or SMTP turned off for this account. Turn it on in the provider's settings, or ask the account administrator.",
+    temporary:
+      "The mail server could not be reached. Check the host and port, then try again.",
+  } as Record<string, string>,
   renameDialog: {
     title: "Rename source",
     body: "The name is only used inside OpenCadence. Recipients never see it.",
@@ -234,6 +247,37 @@ export function describeError(error: Failure, fallback = copy.errors.fallback) {
   return copy.errors.byCode[error.code] ?? error.message ?? fallback;
 }
 
+export function describeMailboxError(
+  error: Failure,
+  fallback = copy.errors.fallback,
+) {
+  if (error.status === 0) {
+    return copy.errors.network;
+  }
+  if (error.status === 401) {
+    return copy.errors.signedOut;
+  }
+  if (error.code === "name_taken") {
+    return copy.mailboxErrors.name_taken;
+  }
+  return (
+    error.message ??
+    copy.mailboxErrors[error.code] ??
+    copy.errors.byCode[error.code] ??
+    fallback
+  );
+}
+
+export function describeSourceError(
+  source: SendingSource,
+  error: Failure,
+  fallback = copy.errors.fallback,
+) {
+  return source.integrationType === "imap-smtp"
+    ? describeMailboxError(error, fallback)
+    : describeError(error, fallback);
+}
+
 export function describeConnectError(code: string) {
   return copy.connectErrors.byCode[code] ?? copy.connectErrors.fallback;
 }
@@ -267,7 +311,12 @@ export function sourceStatusView(source: SendingSource): SourceStatusView {
     const code = source.lastError?.code ?? "";
     return {
       tone: "danger",
-      label: copy.status.byCode[code] ?? copy.status.needsAttention,
+      label:
+        (source.integrationType === "imap-smtp"
+          ? copy.status.mailboxByCode[code]
+          : undefined) ??
+        copy.status.byCode[code] ??
+        copy.status.needsAttention,
       detail: source.lastError?.message || copy.status.noDetail,
     };
   }

@@ -15,6 +15,7 @@ export type NavPage = {
 };
 
 export type NavView = {
+  id?: string;
   title: string;
   tone: "live" | "warning" | "neutral" | "danger";
   count?: string;
@@ -67,7 +68,12 @@ export const areas: NavArea[] = [
     id: "audience",
     title: "Audience",
     pages: [
-      { title: "Contacts", path: "contacts", count: "48,210" },
+      { title: "Contacts", path: "contacts" },
+      {
+        title: "Lists",
+        path: "lists",
+        keywords: "newsletter audience subscribers groups",
+      },
       { title: "Segments", path: "segments" },
       { title: "Forms", path: "forms" },
       {
@@ -89,10 +95,15 @@ export const areas: NavArea[] = [
     pages: [
       { title: "Health", path: "deliverability" },
       { title: "Domains", path: "domains" },
+      {
+        title: "Warm-up",
+        path: "warmup",
+        keywords: "warmup warm up inbox placement reputation ramp spam",
+      },
     ],
     views: [
       { title: "Failing checks", tone: "danger", count: "1" },
-      { title: "Warming up", tone: "live", count: "4" },
+      { id: "warming-up", title: "Warming up", tone: "live" },
     ],
   },
   {
@@ -145,6 +156,20 @@ export const areas: NavArea[] = [
     views: [],
   },
 ];
+
+export type ViewCounts = Record<string, number | undefined>;
+
+export function withViewCounts(area: NavArea, counts: ViewCounts): NavArea {
+  return {
+    ...area,
+    views: area.views.map((view) => {
+      const count = view.id ? counts[view.id] : undefined;
+      return view.id
+        ? { ...view, count: count === undefined ? undefined : String(count) }
+        : view;
+    }),
+  };
+}
 
 export function findPage(path: string) {
   for (const area of areas) {

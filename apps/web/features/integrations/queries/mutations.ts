@@ -40,6 +40,22 @@ export async function connectResend(input: { name: string; apiKey: string }) {
   return asSource(await request("POST", "/sending-sources/resend", input));
 }
 
+export async function connectMailbox(input: {
+  email: string;
+  password: string;
+  name?: string;
+  username?: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecurity: "tls" | "starttls";
+  imapHost: string;
+  imapPort: number;
+  imapSecurity: "tls" | "starttls";
+  dailySendLimit?: number;
+}) {
+  return asSource(await request("POST", "/sending-sources/imap-smtp", input));
+}
+
 export async function authorizeGmail(input: {
   dailySendLimit?: number;
 }): Promise<ApiResult<{ url: string }>> {

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, type Db, desc, eq, inArray, schema, sql } from "@workspace/db";
+import { and, type Db, eq, inArray, schema, sql } from "@workspace/db";
 import { DATABASE } from "../../infra/database/database.module";
 
 const { suppressions } = schema;
@@ -84,7 +84,10 @@ export class SuppressionRepository {
             : undefined,
         ),
       )
-      .orderBy(desc(suppressions.createdAt), desc(suppressions.id))
+      .orderBy(
+        sql`${suppressions.createdAt} desc nulls last`,
+        sql`${suppressions.id} desc nulls last`,
+      )
       .limit(query.limit);
   }
 

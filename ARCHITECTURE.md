@@ -51,10 +51,9 @@ OpenCadence/
 │   ├── core/                the adapter interface and shared test kit (exists)
 │   ├── gmail/                                                         (exists)
 │   ├── resend/                                                        (exists)
+│   ├── imap-smtp/           any mailbox over IMAP and SMTP            (exists)
 │   ├── ses/
 │   ├── smtp/
-│   ├── imap/
-│   ├── gmail/
 │   ├── outlook/
 │   └── sendgrid/
 ├── deploy/                  production packaging
@@ -110,11 +109,11 @@ apps/api/
 │       ├── workspaces/            workspaces, members, roles
 │       ├── api-keys/
 │       ├── audit-log/
-│       ├── contacts/              contacts and custom fields
-│       ├── lists/
-│       ├── tags/
-│       ├── segments/
-│       ├── imports/               CSV and tool imports, contact export
+│       ├── contacts/              contacts and custom fields (exists)
+│       ├── lists/ (exists)
+│       ├── tags/ (exists)
+│       ├── segments/ (exists)
+│       ├── imports/               CSV and tool imports, contact export (exists)
 │       ├── forms/                 subscription forms and public pages
 │       ├── consent/               consent records, export and erasure requests
 │       ├── suppression/           unsubscribes, bounces, complaints, blocklist (exists)
@@ -127,7 +126,7 @@ apps/api/
 │       ├── inbox/                 unified reply inbox
 │       ├── integrations/          connected mailboxes and providers   (exists)
 │       ├── domains/               sending and tracking domains, DNS checks
-│       ├── warmup/
+│       ├── warmup/ (exists)
 │       ├── dispatch/              the send pipeline: limits, rotation, retries (exists)
 │       ├── tracking/              open, click, and unsubscribe endpoints
 │       ├── provider-events/       inbound bounce and complaint webhooks (exists)
@@ -164,10 +163,13 @@ Rules:
   service or through events. Never import another module's repository, DTOs,
   or jobs.
 - Only `*.repository.ts` files touch the database.
-- Only `dispatch` sends email, and it sends only through an integration
-  adapter. `campaigns`, `sequences`, `transactional`, and `warmup` hand
+- Only `dispatch` sends email to contacts, and it sends only through an
+  integration adapter. `campaigns`, `sequences`, and `transactional` hand
   messages to `dispatch`. This is what guarantees suppression and limits
-  apply to every send path.
+  apply to every send path. Two things send through a source directly,
+  because they never go to a contact: the test email on the Integrations
+  page, and `warmup`, which only emails other mailboxes in the warm-up pool.
+  Both still count toward the source's daily limit.
 - Every table and every query is scoped to a workspace.
 - `common/` knows nothing about domains. `infra/` knows nothing about
   domains. If code needs a domain concept it belongs in a module.

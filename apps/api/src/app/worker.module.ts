@@ -7,9 +7,16 @@ import { QueueModule } from "../infra/queue/queue.module";
 import { RedisModule } from "../infra/redis/redis.module";
 import { StorageModule } from "../infra/storage/storage.module";
 import { DispatchWorkerModule } from "../modules/dispatch/dispatch.worker.module";
+import { ImportsWorkerModule } from "../modules/imports/imports.worker.module";
 import { IntegrationsWorkerModule } from "../modules/integrations/integrations.worker.module";
+import { WarmupWorkerModule } from "../modules/warmup/warmup.worker.module";
 
-const featureWorkerModules = [IntegrationsWorkerModule, DispatchWorkerModule];
+const featureWorkerModules = [
+  IntegrationsWorkerModule,
+  DispatchWorkerModule,
+  WarmupWorkerModule,
+  ImportsWorkerModule,
+];
 
 @Module({
   imports: [

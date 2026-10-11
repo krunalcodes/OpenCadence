@@ -42,6 +42,7 @@ import {
   copy,
   describeConnectError,
   describeError,
+  describeSourceError,
   sourceSecondLine,
 } from "@/features/integrations/lib/copy";
 import type {
@@ -166,7 +167,7 @@ export function IntegrationsScreen({
     setBusy(null);
     if (!response.ok) {
       toast.error(copy.toasts.testError(source.name), {
-        description: describeError(response.error),
+        description: describeSourceError(source, response.error),
       });
       if (response.error.code === "not_found") {
         router.refresh();
@@ -183,7 +184,7 @@ export function IntegrationsScreen({
     }
     toast.error(copy.toasts.testFailed(source.name), {
       description: outcome.error
-        ? describeError(outcome.error, copy.toasts.testFailedBody)
+        ? describeSourceError(source, outcome.error, copy.toasts.testFailedBody)
         : copy.toasts.testFailedBody,
     });
   }

@@ -222,6 +222,91 @@ export class SendingSourcesService {
     return this.dto(actor.workspaceId, id);
   }
 
+  async connectImapSmtp(actor: Actor, input: Record<string, unknown>) {
+    const adapter = this.requireAdapter("imap-smtp");
+    const email = this.validEmail(
+      input.email,
+      "email",
+      "Enter the full address of the mailbox, such as you@yourdomain.com.",
+    );
+    const password = typeof input.password === "string" ? input.password : "";
+    if (password === "") {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "validation",
+        "Enter the password or app password for this mailbox.",
+        "password",
+      );
+    }
+    const credentials: Credentials = {
+      kind: "password",
+      username:
+        typeof input.username === "string" && input.username.trim() !== ""
+          ? input.username.trim()
+          : email,
+      password,
+      smtp: this.validMailServer(input, "smtp"),
+      imap: this.validMailServer(input, "imap"),
+    };
+    const dailySendLimit =
+      input.dailySendLimit === undefined || input.dailySendLimit === null
+        ? null
+        : this.validLimit(input.dailySendLimit);
+    const name =
+      input.name === undefined || input.name === null || input.name === ""
+        ? email
+        : this.validName(input.name);
+
+    let settings: SourceSettings;
+    try {
+      settings = (await adapter.verify(credentials)).settings;
+    } catch (error) {
+      const failure = toIntegrationError(error);
+      throw integrationApiError(
+        failure,
+        failure.code === "invalid_credentials" ? "password" : undefined,
+      );
+    }
+
+    const id = randomUUID();
+    await this.insert(actor, {
+      id,
+      integrationType: adapter.type,
+      name,
+      settings,
+      credentials,
+      dailySendLimit,
+      externalAccountId: email.toLowerCase(),
+      email: email.toLowerCase(),
+    });
+    return this.dto(actor.workspaceId, id);
+  }
+
+  async withInbox<T>(
+    sourceId: string,
+    run: (
+      inbox: NonNullable<IntegrationAdapter["inbox"]>,
+      credentials: Credentials,
+    ) => Promise<T>,
+  ): Promise<T> {
+    const source = await this.repository.findSourceById(sourceId);
+    const adapter = source ? this.adapters.find(source.integrationType) : null;
+    if (!source || !adapter?.inbox) {
+      throw new SourceUnavailableError(
+        "source_missing",
+        "This sending source cannot read its inbox.",
+      );
+    }
+    const inbox = adapter.inbox;
+    return this.withCredentials(source, adapter, (credentials) =>
+      run(inbox, credentials),
+    );
+  }
+
+  hasInbox(integrationType: string) {
+    return Boolean(this.adapters.find(integrationType)?.inbox);
+  }
+
   async gmailAuthorizeUrl(actor: Actor, input: { dailySendLimit?: unknown }) {
     const adapter = this.adapters.find("gmail");
     if (!adapter?.oauth) {
@@ -1226,6 +1311,44 @@ export class SendingSourcesService {
       );
     }
     return value;
+  }
+
+  private validMailServer(
+    input: Record<string, unknown>,
+    side: "smtp" | "imap",
+  ) {
+    const host = input[`${side}Host`];
+    const port = Number(input[`${side}Port`]);
+    const security = input[`${side}Security`];
+    const label = side.toUpperCase();
+    if (
+      typeof host !== "string" ||
+      !/^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/i.test(host.trim())
+    ) {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "validation",
+        `Enter the ${label} server name, such as ${side}.yourdomain.com.`,
+        `${side}Host`,
+      );
+    }
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "validation",
+        `Enter the ${label} port as a number between 1 and 65535.`,
+        `${side}Port`,
+      );
+    }
+    if (security !== "tls" && security !== "starttls") {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "validation",
+        `Choose SSL/TLS or STARTTLS for ${label}.`,
+        `${side}Security`,
+      );
+    }
+    return { host: host.trim().toLowerCase(), port, security } as const;
   }
 
   private validEmail(value: unknown, field: string, message: string) {

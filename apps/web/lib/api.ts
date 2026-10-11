@@ -53,7 +53,7 @@ export const malformed: ApiError = {
 };
 
 export async function request(
-  method: "GET" | "POST" | "PATCH" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body?: Row,
 ): Promise<ApiResult<unknown>> {
