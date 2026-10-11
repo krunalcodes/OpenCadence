@@ -4,7 +4,7 @@ import {
   type NestFastifyApplication,
 } from "@nestjs/platform-fastify";
 import { Test, type TestingModule } from "@nestjs/testing";
-import { AppModule } from "../src/app/app.module.js";
+import { AppModule } from "../src/app/app.module";
 
 describe("AppController (e2e)", () => {
   let app: NestFastifyApplication;
@@ -16,6 +16,7 @@ describe("AppController (e2e)", () => {
 
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
+      { bodyParser: false },
     );
     app.enableVersioning({ type: VersioningType.URI, defaultVersion: "1" });
     await app.init();
@@ -27,6 +28,18 @@ describe("AppController (e2e)", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toBe("Hello World!");
+  });
+
+  it("/v1/me (GET) rejects a request without a session", async () => {
+    const response = await app.inject({ method: "GET", url: "/v1/me" });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("/api/auth/ok (GET) is served outside versioning", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/auth/ok" });
+
+    expect(response.statusCode).toBe(200);
   });
 
   afterEach(async () => {

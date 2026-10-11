@@ -12,15 +12,17 @@ import { Check, LogOut, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { PageLinks } from "@/components/app-shell/area-panel";
 import { areaIcons, focusRing } from "@/components/app-shell/page-header";
-import { notBuilt } from "@/components/app-shell/rail";
+import type { ShellUser } from "@/components/app-shell/rail";
 import { WorkspaceTile } from "@/components/app-shell/workspace-switcher";
+import { Spinner } from "@/components/spinner";
+import { initialOf } from "@/lib/initials";
 import {
   appHref,
   areas,
   defaultPagePath,
   type NavArea,
 } from "@/lib/navigation";
-import { type SampleWorkspace, sampleUser } from "@/lib/sample-data";
+import type { Workspace } from "@/lib/session";
 
 const groupLabel = "px-2 py-1 font-medium text-[11.5px] text-muted-foreground";
 
@@ -31,10 +33,14 @@ const rowActive =
   "bg-card text-foreground shadow-xs ring-1 ring-border hover:bg-card";
 
 type MobileNavProps = {
-  workspace: SampleWorkspace;
-  workspaces: SampleWorkspace[];
+  workspace: Workspace;
+  workspaces: Workspace[];
   switching: boolean;
   onSwitchWorkspace: (id: string) => void;
+  onCreateWorkspace: () => void;
+  user: ShellUser;
+  signingOut: boolean;
+  onSignOut: () => void;
   area: NavArea;
   activePath: string;
   open: boolean;
@@ -47,6 +53,10 @@ export function MobileNav({
   workspaces,
   switching,
   onSwitchWorkspace,
+  onCreateWorkspace,
+  user,
+  signingOut,
+  onSignOut,
   area,
   activePath,
   open,
@@ -65,9 +75,7 @@ export function MobileNav({
           <SheetTitle className="truncate font-semibold text-[15px]">
             {workspace.name}
           </SheetTitle>
-          <SheetDescription className="text-xs">
-            {`${workspace.plan} plan`}
-          </SheetDescription>
+          <SheetDescription className="text-xs">Workspace</SheetDescription>
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-2.5">
@@ -115,12 +123,9 @@ export function MobileNav({
                         current && rowActive,
                       )}
                     >
-                      <WorkspaceTile initial={item.initial} size="sm" />
+                      <WorkspaceTile initial={initialOf(item.name)} size="sm" />
                       <span className="min-w-0 flex-1 truncate">
                         {item.name}
-                      </span>
-                      <span className="shrink-0 font-normal text-[11.5px] text-ink-tertiary">
-                        {item.plan}
                       </span>
                       {current ? (
                         <Check
@@ -136,7 +141,10 @@ export function MobileNav({
             </ul>
             <button
               type="button"
-              onClick={() => notBuilt("Creating a workspace")}
+              onClick={() => {
+                close();
+                onCreateWorkspace();
+              }}
               className={cn(row, focusRing, "mt-px w-full text-left")}
             >
               <span
@@ -209,22 +217,28 @@ export function MobileNav({
             aria-hidden
             className="grid size-7 shrink-0 place-items-center rounded-full bg-live font-semibold text-[11px] text-live-foreground"
           >
-            {sampleUser.initials}
+            {user.initials}
           </span>
           <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate font-medium text-foreground">
-              {sampleUser.name}
+            <p className="truncate font-medium text-foreground">{user.name}</p>
+            <p className="truncate text-muted-foreground text-xs">
+              {user.email}
             </p>
-            <p className="text-muted-foreground text-xs">{sampleUser.role}</p>
           </div>
-          <Link
-            href="/sign-in"
-            onClick={close}
-            className={cn(row, focusRing, "shrink-0")}
+          <button
+            type="button"
+            disabled={signingOut}
+            aria-busy={signingOut || undefined}
+            onClick={onSignOut}
+            className={cn(row, focusRing, "shrink-0 disabled:opacity-60")}
           >
-            <LogOut className="size-4" strokeWidth={1.6} aria-hidden />
+            {signingOut ? (
+              <Spinner />
+            ) : (
+              <LogOut className="size-4" strokeWidth={1.6} aria-hidden />
+            )}
             Sign out
-          </Link>
+          </button>
         </div>
       </SheetContent>
     </Sheet>

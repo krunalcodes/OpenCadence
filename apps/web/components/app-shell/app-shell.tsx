@@ -1,20 +1,21 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { AreaPanel } from "@/components/app-shell/area-panel";
 import { CommandPalette } from "@/components/app-shell/command-palette";
+import { CreateWorkspaceDialog } from "@/components/app-shell/create-workspace-dialog";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
-import { Rail } from "@/components/app-shell/rail";
+import { Rail, type ShellUser } from "@/components/app-shell/rail";
 import { TopBar } from "@/components/app-shell/top-bar";
-import { setActiveWorkspace } from "@/lib/active-workspace-actions";
+import { attempt, authClient, describeAuthError } from "@/lib/auth-client";
 import {
   appPathFromPathname,
   defaultPagePath,
   findPage,
 } from "@/lib/navigation";
-import type { SampleWorkspace } from "@/lib/sample-data";
+import type { Workspace } from "@/lib/session";
 
 const PANEL_STORAGE_KEY = "opencadence:panel-collapsed";
 
@@ -35,15 +36,26 @@ function writePanelCollapsed(collapsed: boolean) {
 }
 
 type AppShellProps = {
-  workspace: SampleWorkspace;
-  workspaces: SampleWorkspace[];
+  user: ShellUser;
+  workspace: Workspace;
+  workspaces: Workspace[];
+  activeWorkspaceId: string | null;
   children: React.ReactNode;
 };
 
-export function AppShell({ workspace, workspaces, children }: AppShellProps) {
+export function AppShell({
+  user,
+  workspace,
+  workspaces,
+  activeWorkspaceId,
+  children,
+}: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [switching, startSwitch] = useTransition();
+  const [signingOut, setSigningOut] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const syncedWorkspaceId = useRef<string | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -66,18 +78,52 @@ export function AppShell({ workspace, workspaces, children }: AppShellProps) {
         return;
       }
       startSwitch(async () => {
-        const result = await setActiveWorkspace(id);
-        if (!result.ok) {
-          toast("That workspace could not be opened", {
-            description: "It may have been removed. Choose another workspace.",
+        const { error } = await attempt(() =>
+          authClient.organization.setActive({ organizationId: id }),
+        );
+        if (error) {
+          toast.error("That workspace could not be opened", {
+            description: describeAuthError(
+              error,
+              "It may have been removed, or you may no longer be a member. Choose another workspace.",
+            ),
           });
           return;
         }
-        router.refresh();
+        startSwitch(() => router.refresh());
       });
     },
     [router, workspace.id],
   );
+
+  const signOut = useCallback(async () => {
+    setSigningOut(true);
+    const { error } = await attempt(() => authClient.signOut());
+    if (error) {
+      setSigningOut(false);
+      toast.error("Could not sign you out", {
+        description: describeAuthError(error, "Try again in a moment."),
+      });
+      return;
+    }
+    router.push("/sign-in");
+    router.refresh();
+  }, [router]);
+
+  const openCreateWorkspace = useCallback(() => setCreateOpen(true), []);
+
+  useEffect(() => {
+    if (
+      activeWorkspaceId === workspace.id ||
+      syncedWorkspaceId.current === workspace.id
+    ) {
+      return;
+    }
+    syncedWorkspaceId.current = workspace.id;
+    attempt(() =>
+      authClient.organization.setActive({ organizationId: workspace.id }),
+    );
+  }, [activeWorkspaceId, workspace.id]);
 
   useEffect(() => {
     setPanelCollapsed(readPanelCollapsed());
@@ -125,7 +171,12 @@ export function AppShell({ workspace, workspaces, children }: AppShellProps) {
         Skip to main content
       </a>
 
-      <Rail activeAreaId={area.id} />
+      <Rail
+        activeAreaId={area.id}
+        user={user}
+        signingOut={signingOut}
+        onSignOut={signOut}
+      />
 
       {panelCollapsed ? null : (
         <AreaPanel
@@ -133,6 +184,7 @@ export function AppShell({ workspace, workspaces, children }: AppShellProps) {
           workspaces={workspaces}
           switching={switching}
           onSwitchWorkspace={switchWorkspace}
+          onCreateWorkspace={openCreateWorkspace}
           area={area}
           activePath={page.path}
           onCollapse={() => setPanel(true)}
@@ -146,6 +198,7 @@ export function AppShell({ workspace, workspaces, children }: AppShellProps) {
           workspaces={workspaces}
           switching={switching}
           onSwitchWorkspace={switchWorkspace}
+          onCreateWorkspace={openCreateWorkspace}
           pageTitle={page.title}
           panelCollapsed={panelCollapsed}
           onExpandPanel={() => setPanel(false)}
@@ -165,6 +218,10 @@ export function AppShell({ workspace, workspaces, children }: AppShellProps) {
         workspaces={workspaces}
         switching={switching}
         onSwitchWorkspace={switchWorkspace}
+        onCreateWorkspace={openCreateWorkspace}
+        user={user}
+        signingOut={signingOut}
+        onSignOut={signOut}
         area={area}
         activePath={page.path}
         open={mobileNavOpen}
@@ -178,6 +235,7 @@ export function AppShell({ workspace, workspaces, children }: AppShellProps) {
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
       />
+      <CreateWorkspaceDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

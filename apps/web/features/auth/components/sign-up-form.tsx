@@ -4,34 +4,36 @@ import { Button } from "@workspace/ui/components/button";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
+  FieldSeparator,
 } from "@workspace/ui/components/field";
 import { Input } from "@workspace/ui/components/input";
-import { cn } from "@workspace/ui/lib/utils";
-import { Check, Circle } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useRef, useState } from "react";
+import { toast } from "sonner";
+import { Spinner } from "@/components/spinner";
 import {
+  AuthHeader,
   errorClass,
-  FormNotice,
+  GoogleButton,
   inputClass,
   isEmail,
   labelClass,
   linkClass,
   PasswordInput,
+  PasswordRequirement,
   primaryButtonClass,
+  validateNewPassword,
 } from "@/features/auth/components/form-parts";
-
-const minPasswordLength = 12;
+import { VerifyEmailPanel } from "@/features/auth/components/verify-email-panel";
+import { attempt, authClient, describeAuthError } from "@/lib/auth-client";
 
 type Values = {
   name: string;
   email: string;
   password: string;
-  workspace: string;
   terms: boolean;
 };
 
@@ -39,13 +41,7 @@ type FieldName = keyof Values;
 
 type Errors = Partial<Record<FieldName, string>>;
 
-const fieldOrder: FieldName[] = [
-  "name",
-  "email",
-  "password",
-  "workspace",
-  "terms",
-];
+const fieldOrder: FieldName[] = ["name", "email", "password", "terms"];
 
 function validate(field: FieldName, values: Values) {
   switch (field) {
@@ -59,20 +55,7 @@ function validate(field: FieldName, values: Values) {
         ? undefined
         : "Enter an email address in the format name@company.com.";
     case "password":
-      if (values.password === "") {
-        return `Enter a password of at least ${minPasswordLength} characters.`;
-      }
-      return values.password.length < minPasswordLength
-        ? `Add ${minPasswordLength - values.password.length} more ${
-            minPasswordLength - values.password.length === 1
-              ? "character"
-              : "characters"
-          }. Passwords need at least ${minPasswordLength}.`
-        : undefined;
-    case "workspace":
-      return values.workspace.trim() === ""
-        ? "Enter a workspace name, such as your company or team name."
-        : undefined;
+      return validateNewPassword(values.password);
     case "terms":
       return values.terms
         ? undefined
@@ -85,46 +68,120 @@ function SignUpForm() {
     name: "",
     email: "",
     password: "",
-    workspace: "",
     terms: false,
   });
   const [errors, setErrors] = useState<Errors>({});
-  const [submitted, setSubmitted] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const termsRef = useRef<HTMLElement>(null);
 
   function update<K extends FieldName>(field: K, value: Values[K]) {
     const next = { ...values, [field]: value };
     setValues(next);
-    setSubmitted(false);
     if (errors[field]) {
       setErrors((current) => ({ ...current, [field]: validate(field, next) }));
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function focusField(field: FieldName) {
+    if (field === "terms") {
+      termsRef.current?.focus();
+      return;
+    }
+    document.getElementById(`sign-up-${field}`)?.focus();
+  }
+
+  function showFieldError(field: FieldName, message: string) {
+    setErrors({ [field]: message });
+    focusField(field);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) {
+      return;
+    }
     const next: Errors = {};
     for (const field of fieldOrder) {
       next[field] = validate(field, values);
     }
     setErrors(next);
     const firstInvalid = fieldOrder.find((field) => next[field]);
-    if (!firstInvalid) {
-      setSubmitted(true);
+    if (firstInvalid) {
+      focusField(firstInvalid);
       return;
     }
-    setSubmitted(false);
-    if (firstInvalid === "terms") {
-      termsRef.current?.focus();
+
+    const email = values.email.trim();
+    setPending(true);
+    const { error } = await attempt(() =>
+      authClient.signUp.email({
+        name: values.name.trim(),
+        email,
+        password: values.password,
+      }),
+    );
+    setPending(false);
+    if (!error) {
+      setSentTo(email);
       return;
     }
-    document.getElementById(`sign-up-${firstInvalid}`)?.focus();
+    switch (error.code) {
+      case "USER_ALREADY_EXISTS":
+      case "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL":
+        showFieldError(
+          "email",
+          "An account with this email already exists. Sign in, or use another address.",
+        );
+        return;
+      case "INVALID_EMAIL":
+        showFieldError(
+          "email",
+          "Enter an email address in the format name@company.com.",
+        );
+        return;
+      case "PASSWORD_TOO_SHORT":
+        showFieldError(
+          "password",
+          "That password is too short. Add more characters.",
+        );
+        return;
+      case "PASSWORD_TOO_LONG":
+        showFieldError(
+          "password",
+          "That password is too long. Use a shorter one.",
+        );
+        return;
+      default:
+        toast.error("Could not create your account", {
+          description: describeAuthError(error, "Try again in a moment."),
+        });
+    }
   }
 
-  const passwordMet = values.password.length >= minPasswordLength;
+  if (sentTo) {
+    return (
+      <VerifyEmailPanel
+        email={sentTo}
+        title="Check your inbox"
+        description={
+          <>
+            We sent a verification link to{" "}
+            <span className="font-medium text-foreground">{sentTo}</span>. Open
+            it to finish setting up your account.
+          </>
+        }
+        onBack={() => setSentTo(null)}
+      />
+    );
+  }
 
   return (
     <form noValidate onSubmit={handleSubmit}>
+      <AuthHeader
+        title="Create your account"
+        description="Add your details to get started. Your first workspace is created for you."
+      />
       <FieldGroup className="gap-4">
         <Field data-invalid={errors.name ? true : undefined}>
           <FieldLabel htmlFor="sign-up-name" className={labelClass}>
@@ -197,67 +254,10 @@ function SignUpForm() {
               {errors.password}
             </FieldError>
           ) : (
-            <FieldDescription
+            <PasswordRequirement
               id="sign-up-password-hint"
-              className={cn(
-                "flex items-center gap-1.5 text-[13px]",
-                passwordMet && "text-success",
-              )}
-            >
-              {passwordMet ? (
-                <Check
-                  aria-hidden="true"
-                  strokeWidth={2}
-                  className="size-3.5 shrink-0"
-                />
-              ) : (
-                <Circle
-                  aria-hidden="true"
-                  strokeWidth={1.6}
-                  className="size-3.5 shrink-0"
-                />
-              )}
-              <span>
-                Use at least {minPasswordLength} characters.
-                {passwordMet ? (
-                  <span className="sr-only"> Requirement met.</span>
-                ) : null}
-              </span>
-            </FieldDescription>
-          )}
-        </Field>
-
-        <Field data-invalid={errors.workspace ? true : undefined}>
-          <FieldLabel htmlFor="sign-up-workspace" className={labelClass}>
-            Workspace name
-          </FieldLabel>
-          <Input
-            id="sign-up-workspace"
-            name="workspace"
-            type="text"
-            autoComplete="organization"
-            required
-            value={values.workspace}
-            onChange={(event) => update("workspace", event.target.value)}
-            aria-invalid={errors.workspace ? true : undefined}
-            aria-describedby={
-              errors.workspace
-                ? "sign-up-workspace-error"
-                : "sign-up-workspace-hint"
-            }
-            className={inputClass}
-          />
-          {errors.workspace ? (
-            <FieldError id="sign-up-workspace-error" className={errorClass}>
-              {errors.workspace}
-            </FieldError>
-          ) : (
-            <FieldDescription
-              id="sign-up-workspace-hint"
-              className="text-[13px]"
-            >
-              Usually your company or team name.
-            </FieldDescription>
+              value={values.password}
+            />
           )}
         </Field>
 
@@ -299,14 +299,19 @@ function SignUpForm() {
         </div>
       </FieldGroup>
 
-      <FormNotice
-        title={submitted ? "Sign-up is not connected yet." : null}
-        detail="No account was created and nothing was saved."
-      />
-
-      <Button type="submit" className={cn("mt-5", primaryButtonClass)}>
-        Create account
-      </Button>
+      <div className="mt-5 flex flex-col gap-4">
+        <Button
+          type="submit"
+          className={primaryButtonClass}
+          disabled={pending}
+          aria-busy={pending || undefined}
+        >
+          {pending ? <Spinner /> : null}
+          Create account
+        </Button>
+        <FieldSeparator className="my-0 text-[13px]">or</FieldSeparator>
+        <GoogleButton disabled={pending} />
+      </div>
 
       <p className="mt-6 text-[13px] text-muted-foreground">
         Already have an account?{" "}

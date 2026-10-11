@@ -18,7 +18,7 @@ import {
   type NavPage,
   type NavView,
 } from "@/lib/navigation";
-import type { SampleWorkspace } from "@/lib/sample-data";
+import type { Workspace } from "@/lib/session";
 
 export const viewToneClass: Record<NavView["tone"], string> = {
   live: "bg-live outline outline-1 outline-primary",
@@ -72,10 +72,11 @@ export function PageLinks({ pages, activePath, onNavigate }: PageLinksProps) {
 }
 
 type AreaPanelProps = {
-  workspace: SampleWorkspace;
-  workspaces: SampleWorkspace[];
+  workspace: Workspace;
+  workspaces: Workspace[];
   switching: boolean;
   onSwitchWorkspace: (id: string) => void;
+  onCreateWorkspace: () => void;
   area: NavArea;
   activePath: string;
   onCollapse: () => void;
@@ -87,6 +88,7 @@ export function AreaPanel({
   workspaces,
   switching,
   onSwitchWorkspace,
+  onCreateWorkspace,
   area,
   activePath,
   onCollapse,
@@ -102,6 +104,7 @@ export function AreaPanel({
         workspaces={workspaces}
         pending={switching}
         onSwitch={onSwitchWorkspace}
+        onCreate={onCreateWorkspace}
       />
 
       <div className="flex h-8 shrink-0 items-center justify-between pr-0.5 pl-2">

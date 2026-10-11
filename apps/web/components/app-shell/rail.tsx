@@ -20,8 +20,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { areaIcons } from "@/components/app-shell/page-header";
 import { BrandIcon } from "@/components/brand-icon";
+import { Spinner } from "@/components/spinner";
 import { type AreaId, appHref, areas, defaultPagePath } from "@/lib/navigation";
-import { sampleUser } from "@/lib/sample-data";
 
 const railFocus =
   "focus-visible:outline-2 focus-visible:outline-rail-foreground";
@@ -35,11 +35,20 @@ export function notBuilt(action: string) {
   });
 }
 
-type RailProps = {
-  activeAreaId: AreaId;
+export type ShellUser = {
+  name: string;
+  email: string;
+  initials: string;
 };
 
-export function Rail({ activeAreaId }: RailProps) {
+type RailProps = {
+  activeAreaId: AreaId;
+  user: ShellUser;
+  signingOut: boolean;
+  onSignOut: () => void;
+};
+
+export function Rail({ activeAreaId, user, signingOut, onSignOut }: RailProps) {
   const mainAreas = areas.filter((area) => area.id !== "settings");
   const settingsActive = activeAreaId === "settings";
 
@@ -143,7 +152,7 @@ export function Rail({ activeAreaId }: RailProps) {
                   render={
                     <button
                       type="button"
-                      aria-label={`Account menu for ${sampleUser.name}`}
+                      aria-label={`Account menu for ${user.name}`}
                     />
                   }
                 />
@@ -153,10 +162,10 @@ export function Rail({ activeAreaId }: RailProps) {
                 railFocus,
               )}
             >
-              {sampleUser.initials}
+              {user.initials}
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={10}>
-              {sampleUser.name}
+              {user.name}
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent
@@ -168,10 +177,10 @@ export function Rail({ activeAreaId }: RailProps) {
             <DropdownMenuGroup>
               <DropdownMenuLabel className="flex flex-col px-2 py-1.5">
                 <span className="truncate font-medium text-[13px] text-foreground">
-                  {sampleUser.name}
+                  {user.name}
                 </span>
-                <span className="font-normal text-muted-foreground text-xs">
-                  {sampleUser.role}
+                <span className="truncate font-normal text-muted-foreground text-xs">
+                  {user.email}
                 </span>
               </DropdownMenuLabel>
             </DropdownMenuGroup>
@@ -185,9 +194,16 @@ export function Rail({ activeAreaId }: RailProps) {
             </DropdownMenuItem>
             <DropdownMenuItem
               className="gap-2 px-2 py-1.5 text-[13px]"
-              render={<Link href="/sign-in" />}
+              closeOnClick={false}
+              disabled={signingOut}
+              aria-busy={signingOut || undefined}
+              onClick={onSignOut}
             >
-              <LogOut strokeWidth={1.6} aria-hidden />
+              {signingOut ? (
+                <Spinner />
+              ) : (
+                <LogOut strokeWidth={1.6} aria-hidden />
+              )}
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>

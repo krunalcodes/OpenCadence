@@ -12,16 +12,17 @@ import { Menu, PanelLeft, Plus, Upload } from "lucide-react";
 import { buttonFocusRing, focusRing } from "@/components/app-shell/page-header";
 import { notBuilt } from "@/components/app-shell/rail";
 import { WorkspaceSwitcher } from "@/components/app-shell/workspace-switcher";
-import type { SampleWorkspace } from "@/lib/sample-data";
+import type { Workspace } from "@/lib/session";
 
 const iconButton =
   "grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
 
 type TopBarProps = {
-  workspace: SampleWorkspace;
-  workspaces: SampleWorkspace[];
+  workspace: Workspace;
+  workspaces: Workspace[];
   switching: boolean;
   onSwitchWorkspace: (id: string) => void;
+  onCreateWorkspace: () => void;
   pageTitle: string;
   panelCollapsed: boolean;
   onExpandPanel: () => void;
@@ -33,6 +34,7 @@ export function TopBar({
   workspaces,
   switching,
   onSwitchWorkspace,
+  onCreateWorkspace,
   pageTitle,
   panelCollapsed,
   onExpandPanel,
@@ -78,6 +80,7 @@ export function TopBar({
           workspaces={workspaces}
           pending={switching}
           onSwitch={onSwitchWorkspace}
+          onCreate={onCreateWorkspace}
           className="-ml-1 hidden md:grid"
         />
       ) : null}

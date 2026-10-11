@@ -21,11 +21,12 @@ import {
   TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import { ChevronsUpDown, LoaderCircle, Plus } from "lucide-react";
+import { ChevronsUpDown, Plus } from "lucide-react";
 import { useState } from "react";
 import { focusRing } from "@/components/app-shell/page-header";
-import { notBuilt } from "@/components/app-shell/rail";
-import type { SampleWorkspace } from "@/lib/sample-data";
+import { Spinner } from "@/components/spinner";
+import { initialOf } from "@/lib/initials";
+import type { Workspace } from "@/lib/session";
 
 type WorkspaceTileProps = {
   initial: string;
@@ -55,10 +56,11 @@ export function WorkspaceTile({
 }
 
 type WorkspaceSwitcherProps = {
-  workspace: SampleWorkspace;
-  workspaces: SampleWorkspace[];
+  workspace: Workspace;
+  workspaces: Workspace[];
   pending: boolean;
   onSwitch: (id: string) => void;
+  onCreate: () => void;
   variant?: "panel" | "compact";
   className?: string;
 };
@@ -68,11 +70,12 @@ export function WorkspaceSwitcher({
   workspaces,
   pending,
   onSwitch,
+  onCreate,
   variant = "panel",
   className,
 }: WorkspaceSwitcherProps) {
   const [open, setOpen] = useState(false);
-  const label = `Switch workspace. Current workspace: ${workspace.name}, ${workspace.plan} plan`;
+  const label = `Switch workspace. Current workspace: ${workspace.name}`;
 
   function choose(id: string) {
     setOpen(false);
@@ -85,6 +88,7 @@ export function WorkspaceSwitcher({
         <PopoverTrigger
           aria-label={label}
           aria-busy={pending || undefined}
+          disabled={pending}
           className={cn(
             "flex h-11 w-full shrink-0 items-center gap-2.5 rounded-[10px] border border-border bg-card pr-2 pl-[7px] text-left shadow-xs transition-[background-color,opacity] hover:bg-muted data-popup-open:bg-muted",
             focusRing,
@@ -92,21 +96,17 @@ export function WorkspaceSwitcher({
             className,
           )}
         >
-          <WorkspaceTile initial={workspace.initial} />
+          <WorkspaceTile initial={initialOf(workspace.name)} />
           <span className="flex min-w-0 flex-1 flex-col leading-tight">
             <span className="truncate font-semibold text-foreground">
               {workspace.name}
             </span>
             <span className="truncate text-[11.5px] text-muted-foreground">
-              {`${workspace.plan} plan`}
+              Workspace
             </span>
           </span>
           {pending ? (
-            <LoaderCircle
-              className="size-3.5 shrink-0 animate-spin text-ink-tertiary motion-reduce:animate-none"
-              strokeWidth={1.6}
-              aria-hidden
-            />
+            <Spinner className="size-3.5 text-ink-tertiary" />
           ) : (
             <ChevronsUpDown
               className="size-3.5 shrink-0 text-ink-tertiary"
@@ -122,6 +122,7 @@ export function WorkspaceSwitcher({
               <PopoverTrigger
                 aria-label={label}
                 aria-busy={pending || undefined}
+                disabled={pending}
               />
             }
             className={cn(
@@ -131,11 +132,15 @@ export function WorkspaceSwitcher({
               className,
             )}
           >
-            <WorkspaceTile
-              initial={workspace.initial}
-              size="sm"
-              className="size-6 rounded-[7px] text-[11px]"
-            />
+            {pending ? (
+              <Spinner className="text-muted-foreground" />
+            ) : (
+              <WorkspaceTile
+                initial={initialOf(workspace.name)}
+                size="sm"
+                className="size-6 rounded-[7px] text-[11px]"
+              />
+            )}
           </TooltipTrigger>
           <TooltipContent side="bottom">{workspace.name}</TooltipContent>
         </Tooltip>
@@ -166,12 +171,9 @@ export function WorkspaceSwitcher({
                     onSelect={() => choose(item.id)}
                     className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
                   >
-                    <WorkspaceTile initial={item.initial} size="sm" />
+                    <WorkspaceTile initial={initialOf(item.name)} size="sm" />
                     <span className="min-w-0 flex-1 truncate font-medium">
                       {item.name}
-                    </span>
-                    <span className="shrink-0 text-[11.5px] text-ink-tertiary">
-                      {item.plan}
                     </span>
                   </CommandItem>
                 ))}
@@ -184,7 +186,7 @@ export function WorkspaceSwitcher({
                 value="Create workspace"
                 onSelect={() => {
                   setOpen(false);
-                  notBuilt("Creating a workspace");
+                  onCreate();
                 }}
                 className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
               >

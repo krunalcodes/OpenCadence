@@ -1,0 +1,9 @@
+{
+  "extends": "@workspace/typescript-config/base.json",
+  "compilerOptions": {
+    "lib": ["es2023"],
+    "types": ["node"]
+  },
+  "include": ["src", "drizzle.config.ts", "tsdown.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

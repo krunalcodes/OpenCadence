@@ -12,12 +12,13 @@ import {
 import { useRouter } from "next/navigation";
 import { pageIcon } from "@/components/app-shell/page-header";
 import { WorkspaceTile } from "@/components/app-shell/workspace-switcher";
+import { initialOf } from "@/lib/initials";
 import { appHref, areas } from "@/lib/navigation";
-import type { SampleWorkspace } from "@/lib/sample-data";
+import type { Workspace } from "@/lib/session";
 
 type CommandPaletteProps = {
-  workspace: SampleWorkspace;
-  workspaces: SampleWorkspace[];
+  workspace: Workspace;
+  workspaces: Workspace[];
   onSwitchWorkspace: (id: string) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -88,11 +89,8 @@ export function CommandPalette({
                 }}
                 className="text-[13px]"
               >
-                <WorkspaceTile initial={item.initial} size="sm" />
+                <WorkspaceTile initial={initialOf(item.name)} size="sm" />
                 <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                <span className="shrink-0 text-[11.5px] text-ink-tertiary">
-                  {item.plan}
-                </span>
               </CommandItem>
             ))}
           </CommandGroup>

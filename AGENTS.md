@@ -55,7 +55,7 @@ Decided. Use these; do not introduce alternatives without asking.
 | Area | Choice |
 | --- | --- |
 | Backend API | NestJS (`apps/api`), API docs with Scalar at `/docs` |
-| Database | PostgreSQL |
+| Database | PostgreSQL, Drizzle ORM on node-postgres (`@workspace/db`), drizzle-kit SQL migrations |
 | Object storage | S3-compatible (MinIO in local development) |
 | Queues and background jobs | BullMQ on Redis (sends, sequence steps, warm-up, webhooks) |
 | Web app | Next.js with React (`apps/web`) |
@@ -66,11 +66,19 @@ Decided. Use these; do not introduce alternatives without asking.
 | Data tables | TanStack Table (React Table) |
 | AI features | Vercel AI SDK |
 | Sending integrations | Resend and Amazon SES first; then Gmail, Outlook, IMAP/SMTP mailboxes and SendGrid-style providers, all behind the adapter interface |
-| Authentication | Better Auth (planned; active workspace kept in the session) |
+| Authentication | Better Auth (`@workspace/auth`), served by the API at `/api/auth` and proxied by Next; email and password, Google, organization plugin (workspaces) |
+| System email | React Email with Tailwind (`@workspace/email`); Resend and console providers |
+| Package builds | tsdown |
+| API configuration | `@nestjs/config`, one root `.env` |
 | Tooling | Turborepo, Bun, TypeScript, Biome |
 
-Not decided yet, so ask before picking: ORM or query layer and migration
-tool, the i18n library, the email builder/editor, and deployment packaging.
+Not decided yet, so ask before picking: the i18n library, the email
+builder/editor, and deployment packaging.
+
+The owner makes every technical decision. Before choosing a library, a
+driver, a package layout, a schema convention, or anything else with more
+than one reasonable answer, ask with a recommendation. Do not add a
+dependency that was not asked for.
 
 ## Repository
 
@@ -85,6 +93,9 @@ Turborepo monorepo on Bun workspaces (Bun 1.3+, Node 24+).
   URI-versioned (`/v1/...`). Root module lives in `src/app/`; tests run on
   Vitest
 - `packages/ui`: shared shadcn/ui components on Base UI (`@workspace/ui`)
+- `packages/db`: Drizzle schema, client, and migrations (`@workspace/db`)
+- `packages/auth`: Better Auth server factory and client (`@workspace/auth`)
+- `packages/email`: system email templates and providers (`@workspace/email`)
 - `packages/typescript-config`: shared tsconfig presets
 - `.agents/skills`: project agent skills (symlinked into `.claude/skills`)
 
@@ -118,6 +129,22 @@ A lefthook pre-commit hook runs Biome on staged files and re-stages fixes.
 - Conventional Commits. Use the `caveman-commit` skill to commit.
 - Use `bun`, not `npm` or `npx` (the repo pins Bun via `devEngines`).
 - Product URLs live under `/app` and never contain a workspace identifier.
+- Database: plural snake_case table names, snake_case columns, `uuid` ids
+  with `defaultRandom()`, `text` for strings (no `varchar`). Better Auth
+  tables are generated with its CLI first, then edited to these rules. The
+  organization plugin's tables are named for workspaces (`workspaces`,
+  `workspace_members`, `workspace_invitations`).
+- No file extensions in relative imports (`./auth.module`, not
+  `./auth.module.js`). tsdown bundles the packages; the API's `.swcrc` adds
+  the extensions at compile time.
+- Every API route requires a session by default (global auth guard). Mark
+  public routes with `@AllowAnonymous()`.
+- Emails link to web pages (`/verify-email`, `/reset-password`), never to
+  `/api/auth` URLs.
+- Show a spinner inside any button that is waiting on a request, and a
+  skeleton shaped like the real layout wherever data is loading.
+- Packages take configuration as arguments and never read `process.env`.
+  The API reads the environment and passes values in.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

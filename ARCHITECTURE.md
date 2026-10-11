@@ -39,7 +39,9 @@ OpenCadence/
 ├── packages/                shared libraries
 │   ├── ui/                  shadcn/ui components on Base UI           (exists)
 │   ├── typescript-config/   shared tsconfig presets                   (exists)
-│   ├── db/                  database schema, migrations, client
+│   ├── db/                  Drizzle schema, migrations, client       (exists)
+│   ├── auth/                Better Auth server factory and client    (exists)
+│   ├── email/               system email templates and providers     (exists)
 │   ├── contracts/           request and response schemas shared by API and web
 │   ├── api-client/          typed client generated from the OpenAPI document
 │   ├── email-renderer/      merge tags, spintax, template to HTML and text
@@ -319,8 +321,9 @@ uses them only from `dispatch`, `provider-events`, `inbox`, and `warmup`.
 ## Dependency direction
 
 ```text
-apps/web  ──▶  packages/ui, api-client, contracts, i18n, env
-apps/api  ──▶  packages/db, contracts, email-renderer, i18n, env
+apps/web  ──▶  packages/ui, auth (client entry only), api-client, contracts, i18n, env
+apps/api  ──▶  packages/db, auth, email, contracts, email-renderer, i18n, env
+packages/auth  ──▶  packages/db, email
           ──▶  integrations/*
 integrations/*  ──▶  integrations/core
 packages/*  never import from apps/ or from integrations/
@@ -354,10 +357,10 @@ the first code depends on them.
    audience and sending.
 4. **Decided: product routes live under `/app`, and the workspace is never
    in the URL.** The active workspace comes from the session (the Better
-   Auth active organization). Until authentication is built, the web app
-   keeps it in an httpOnly cookie behind `getActiveWorkspace()` and the
-   `setActiveWorkspace()` server action, so only those two files change
-   when the session replaces the cookie.
+   Auth active organization), stored as `active_workspace_id` on the
+   session row.
 5. **A marketing site and a documentation site are not planned here.** If
    they are wanted later they become `apps/www` and `apps/docs`.
-6. The contents of `packages/db` depend on the ORM, which is still undecided.
+6. **Decided: Drizzle on node-postgres** in `packages/db`, with drizzle-kit
+   SQL migrations. Better Auth lives in `packages/auth` and is served by
+   the API; system email lives in `packages/email`.

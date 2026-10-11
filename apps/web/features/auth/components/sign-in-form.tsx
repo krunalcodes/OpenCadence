@@ -9,29 +9,26 @@ import {
   FieldSeparator,
 } from "@workspace/ui/components/field";
 import { Input } from "@workspace/ui/components/input";
-import { KeyRound } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+import { toast } from "sonner";
+import { Spinner } from "@/components/spinner";
 import {
+  AuthHeader,
   errorClass,
-  FormNotice,
+  GoogleButton,
   inputClass,
   isEmail,
   labelClass,
   linkClass,
   PasswordInput,
   primaryButtonClass,
-  secondaryButtonClass,
 } from "@/features/auth/components/form-parts";
+import { VerifyEmailPanel } from "@/features/auth/components/verify-email-panel";
+import { attempt, authClient, describeAuthError } from "@/lib/auth-client";
 
 type Errors = { email?: string; password?: string };
-
-type Notice = "sign-in" | "sso" | null;
-
-const notices = {
-  "sign-in": "Sign-in is not connected yet.",
-  sso: "Single sign-on is not connected yet.",
-} as const;
 
 function validateEmail(value: string) {
   if (value.trim() === "") {
@@ -51,33 +48,82 @@ function validatePassword(value: string) {
 }
 
 function SignInForm() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Errors>({});
-  const [notice, setNotice] = useState<Notice>(null);
+  const [pending, setPending] = useState(false);
+  const [unverified, setUnverified] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) {
+      return;
+    }
     const next: Errors = {
       email: validateEmail(email),
       password: validatePassword(password),
     };
     setErrors(next);
     if (next.email) {
-      setNotice(null);
       document.getElementById("sign-in-email")?.focus();
       return;
     }
     if (next.password) {
-      setNotice(null);
       document.getElementById("sign-in-password")?.focus();
       return;
     }
-    setNotice("sign-in");
+
+    setPending(true);
+    const { error } = await attempt(() =>
+      authClient.signIn.email({ email: email.trim(), password }),
+    );
+    if (!error) {
+      router.push("/app");
+      router.refresh();
+      return;
+    }
+    setPending(false);
+    if (error.status === 403 || error.code === "EMAIL_NOT_VERIFIED") {
+      setUnverified(true);
+      return;
+    }
+    if (error.status === 401 || error.code === "INVALID_EMAIL_OR_PASSWORD") {
+      setErrors({
+        password:
+          "That email and password do not match. Check both and try again.",
+      });
+      document.getElementById("sign-in-password")?.focus();
+      return;
+    }
+    toast.error("Could not sign you in", {
+      description: describeAuthError(error, "Try again in a moment."),
+    });
+  }
+
+  if (unverified) {
+    return (
+      <VerifyEmailPanel
+        email={email.trim()}
+        title="Verify your email to sign in"
+        description={
+          <>
+            <span className="font-medium text-foreground">{email.trim()}</span>{" "}
+            has not been verified yet. Open the link we emailed you, or send a
+            new one.
+          </>
+        }
+        onBack={() => setUnverified(false)}
+      />
+    );
   }
 
   return (
     <form noValidate onSubmit={handleSubmit}>
+      <AuthHeader
+        title="Sign in"
+        description="Use the email address for your OpenCadence account."
+      />
       <FieldGroup className="gap-4">
         <Field data-invalid={errors.email ? true : undefined}>
           <FieldLabel htmlFor="sign-in-email" className={labelClass}>
@@ -95,7 +141,6 @@ function SignInForm() {
             value={email}
             onChange={(event) => {
               setEmail(event.target.value);
-              setNotice(null);
               if (errors.email) {
                 setErrors((current) => ({
                   ...current,
@@ -125,7 +170,6 @@ function SignInForm() {
             value={password}
             onValueChange={(value) => {
               setPassword(value);
-              setNotice(null);
               if (errors.password) {
                 setErrors((current) => ({
                   ...current,
@@ -142,35 +186,25 @@ function SignInForm() {
             </FieldError>
           ) : null}
           <p className="text-[13px]">
-            <Link href="#" className={linkClass}>
+            <Link href="/forgot-password" className={linkClass}>
               Forgot password?
             </Link>
           </p>
         </Field>
       </FieldGroup>
 
-      <FormNotice
-        title={notice ? notices[notice] : null}
-        detail="Nothing was sent or saved."
-      />
-
       <div className="mt-5 flex flex-col gap-4">
-        <Button type="submit" className={primaryButtonClass}>
+        <Button
+          type="submit"
+          className={primaryButtonClass}
+          disabled={pending}
+          aria-busy={pending || undefined}
+        >
+          {pending ? <Spinner /> : null}
           Sign in
         </Button>
         <FieldSeparator className="my-0 text-[13px]">or</FieldSeparator>
-        <Button
-          type="button"
-          variant="outline"
-          className={secondaryButtonClass}
-          onClick={() => {
-            setErrors({});
-            setNotice("sso");
-          }}
-        >
-          <KeyRound aria-hidden="true" strokeWidth={1.6} />
-          Continue with single sign-on
-        </Button>
+        <GoogleButton disabled={pending} />
       </div>
 
       <p className="mt-6 text-[13px] text-muted-foreground">
