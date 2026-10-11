@@ -136,8 +136,8 @@ and cannot be turned off.
 | Sending integrations       | Resend and Amazon SES first, then mailboxes    |
 | Tooling                    | Turborepo, Bun, TypeScript, Biome              |
 
-Only the web and API scaffolds exist so far; the database and queue layers
-are still to be added.
+The web app, the API, the database, and the queue layer exist. The first
+feature being built is connecting sending sources (Gmail and Resend).
 
 ## Development
 
@@ -156,6 +156,21 @@ credentials, copy `.env.example` to `.env` and edit it.
 
 The web app runs at http://localhost:3000 and the API at
 http://localhost:3001/v1, with API docs at http://localhost:3001/docs.
+
+The API needs `CREDENTIALS_ENCRYPTION_KEY` in `.env` before it starts. It
+encrypts the provider keys and mailbox tokens you connect. Generate one with
+`openssl rand -base64 32` and keep it safe: connected sources cannot be read
+without it.
+
+To connect Gmail mailboxes, create a Google OAuth client, set
+`GMAIL_CLIENT_ID` and `GMAIL_CLIENT_SECRET` (or reuse the Google sign-in
+client), and register the redirect URL
+`http://localhost:3000/api/v1/sending-sources/gmail/callback`. Keep the
+Google consent screen out of "Testing" mode, or connections expire after
+seven days.
+
+Set `BULL_BOARD_USERNAME` and `BULL_BOARD_PASSWORD` to turn on the queue
+dashboard at http://localhost:3001/queues.
 
 | Command               | What it does                               |
 | --------------------- | ------------------------------------------ |
@@ -178,6 +193,8 @@ This is a [Turborepo](https://turborepo.dev) monorepo using Bun workspaces.
 - `apps/api`: the [NestJS](https://nestjs.com) API
 - `packages/ui`: shared shadcn/ui components on Base UI (`@workspace/ui`)
 - `packages/typescript-config`: shared `tsconfig.json` presets
+- `integrations/*`: one package per sending integration, plus the shared
+  adapter interface in `integrations/core`
 
 ## Contributing
 

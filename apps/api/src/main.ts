@@ -9,6 +9,7 @@ import { apiReference } from "@scalar/nestjs-api-reference";
 import { API_KEY_HEADER } from "@workspace/auth";
 import { AppModule } from "./app/app.module";
 import { API_KEY_SECURITY } from "./common/decorators/workspace-auth.decorator";
+import { mountQueueBoard } from "./infra/queue/queue-board.mount";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -42,6 +43,8 @@ async function bootstrap() {
     .build();
   const document = SwaggerModule.createDocument(app, config);
   app.use("/docs", apiReference({ content: document, withFastify: true }));
+
+  await mountQueueBoard(app);
 
   await app.listen(process.env.PORT ?? 3001, process.env.HOST ?? "0.0.0.0");
 }

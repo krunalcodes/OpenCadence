@@ -1,0 +1,402 @@
+"use client";
+
+import { Button } from "@workspace/ui/components/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@workspace/ui/components/empty";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@workspace/ui/components/input-group";
+import { Plug, Plus, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
+import { PageHeader } from "@/components/app-shell/page-header";
+import { ConnectSheet } from "@/features/integrations/components/connect-sheet";
+import {
+  LoadFailed,
+  primaryButtonClass,
+  SectionCard,
+  secondaryButtonClass,
+} from "@/features/integrations/components/integration-parts";
+import { SourceCatalog } from "@/features/integrations/components/source-catalog";
+import {
+  DailyLimitDialog,
+  DisconnectDialog,
+  RenameSourceDialog,
+  TestEmailDialog,
+} from "@/features/integrations/components/source-dialogs";
+import {
+  type RowAction,
+  SourcesTable,
+} from "@/features/integrations/components/sources-table";
+import type { IntegrationId } from "@/features/integrations/lib/catalog";
+import {
+  copy,
+  describeConnectError,
+  describeError,
+  sourceSecondLine,
+} from "@/features/integrations/lib/copy";
+import type {
+  SendingSource,
+  SourcesResult,
+} from "@/features/integrations/lib/sources";
+import {
+  authorizeGmail,
+  testSource,
+  updateSource,
+} from "@/features/integrations/queries/mutations";
+import { appHref } from "@/lib/navigation";
+
+export type ConnectNotice = {
+  connected: string | null;
+  connectError: string | null;
+};
+
+type IntegrationsScreenProps = {
+  result: SourcesResult;
+  notice: ConnectNotice;
+};
+
+type DialogKind = "rename" | "limit" | "testEmail" | "disconnect";
+
+const noSources: SendingSource[] = [];
+
+export function IntegrationsScreen({
+  result,
+  notice,
+}: IntegrationsScreenProps) {
+  const router = useRouter();
+  const [seen, setSeen] = useState(result);
+  const [overrides, setOverrides] = useState<Record<string, SendingSource>>({});
+  const [query, setQuery] = useState("");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [picked, setPicked] = useState<IntegrationId | null>(null);
+  const [busy, setBusy] = useState<{ id: string; action: RowAction } | null>(
+    null,
+  );
+  const [dialog, setDialog] = useState<{
+    kind: DialogKind;
+    source: SendingSource;
+  } | null>(null);
+  const [retrying, startRetry] = useTransition();
+  const noticeShown = useRef(false);
+
+  if (seen !== result) {
+    setSeen(result);
+    setOverrides({});
+  }
+
+  useEffect(() => {
+    if (noticeShown.current || (!notice.connected && !notice.connectError)) {
+      return;
+    }
+    noticeShown.current = true;
+    if (notice.connectError) {
+      toast.error(copy.connectErrors.title, {
+        description: describeConnectError(notice.connectError),
+      });
+    } else {
+      toast.success(copy.toasts.gmailConnected, {
+        description: copy.toasts.connectedBody,
+      });
+    }
+    router.replace(appHref("integrations"));
+  }, [notice, router]);
+
+  const ready = result.state === "ready";
+  const sources = ready
+    ? result.sources.map((source) => overrides[source.id] ?? source)
+    : noSources;
+
+  const needle = query.trim().toLowerCase();
+  const visible = sources.filter(
+    (source) =>
+      needle === "" ||
+      `${source.name} ${source.email ?? ""} ${sourceSecondLine(source)}`
+        .toLowerCase()
+        .includes(needle),
+  );
+
+  function applySource(source?: SendingSource) {
+    if (source) {
+      setOverrides((current) => ({ ...current, [source.id]: source }));
+    }
+    router.refresh();
+  }
+
+  function openSheet(id: IntegrationId | null) {
+    setPicked(id);
+    setSheetOpen(true);
+  }
+
+  function openDialog(kind: DialogKind) {
+    return (source: SendingSource) => setDialog({ kind, source });
+  }
+
+  function dialogSource(kind: DialogKind) {
+    return dialog?.kind === kind ? dialog.source : null;
+  }
+
+  function closeDialog() {
+    setDialog(null);
+  }
+
+  async function handleTest(source: SendingSource) {
+    if (busy) {
+      return;
+    }
+    setBusy({ id: source.id, action: "test" });
+    const response = await testSource(source.id);
+    setBusy(null);
+    if (!response.ok) {
+      toast.error(copy.toasts.testError(source.name), {
+        description: describeError(response.error),
+      });
+      if (response.error.code === "not_found") {
+        router.refresh();
+      }
+      return;
+    }
+    const outcome = response.data;
+    applySource(outcome.source ?? undefined);
+    if (outcome.ok) {
+      toast.success(copy.toasts.testOk(source.name), {
+        description: copy.toasts.testOkBody,
+      });
+      return;
+    }
+    toast.error(copy.toasts.testFailed(source.name), {
+      description: outcome.error
+        ? describeError(outcome.error, copy.toasts.testFailedBody)
+        : copy.toasts.testFailedBody,
+    });
+  }
+
+  async function setPaused(source: SendingSource, paused: boolean) {
+    setBusy({ id: source.id, action: "pause" });
+    const response = await updateSource(source.id, { paused });
+    setBusy(null);
+    if (!response.ok) {
+      toast.error(
+        paused
+          ? copy.toasts.pauseFailed(source.name)
+          : copy.toasts.resumeFailed(source.name),
+        { description: describeError(response.error) },
+      );
+      if (response.error.code === "not_found") {
+        router.refresh();
+      }
+      return false;
+    }
+    applySource(response.data);
+    return true;
+  }
+
+  async function handleTogglePause(source: SendingSource) {
+    if (busy) {
+      return;
+    }
+    const paused = source.status !== "paused";
+    if (!(await setPaused(source, paused))) {
+      return;
+    }
+    toast(
+      paused
+        ? copy.toasts.paused(source.name)
+        : copy.toasts.resumed(source.name),
+      {
+        action: {
+          label: copy.toasts.undo,
+          onClick: () => {
+            void setPaused(source, !paused);
+          },
+        },
+      },
+    );
+  }
+
+  async function handleReconnect(source: SendingSource) {
+    if (busy) {
+      return;
+    }
+    setBusy({ id: source.id, action: "reconnect" });
+    const response = await authorizeGmail(
+      source.dailySendLimit === null
+        ? {}
+        : { dailySendLimit: source.dailySendLimit },
+    );
+    if (response.ok) {
+      window.location.href = response.data.url;
+      return;
+    }
+    setBusy(null);
+    toast.error(copy.toasts.reconnectFailed(source.name), {
+      description: describeError(response.error),
+    });
+  }
+
+  function handleConnected(source: SendingSource) {
+    setSheetOpen(false);
+    setQuery("");
+    toast.success(copy.toasts.connected(source.name), {
+      description: copy.toasts.connectedBody,
+    });
+    router.refresh();
+  }
+
+  return (
+    <div className="@container flex min-w-0 flex-col gap-[18px] text-[13px] leading-normal">
+      <PageHeader
+        title={copy.title}
+        description={
+          ready ? copy.description(sources.length) : copy.descriptionFailed
+        }
+        actions={
+          ready ? (
+            <Button
+              type="button"
+              onClick={() => openSheet(null)}
+              className={primaryButtonClass}
+            >
+              <Plus aria-hidden strokeWidth={1.8} />
+              {copy.connect}
+            </Button>
+          ) : null
+        }
+      />
+
+      <SectionCard
+        id="integrations-connected"
+        title={copy.connected.title}
+        description={copy.connected.description}
+        action={
+          sources.length > 0 ? (
+            <InputGroup className="h-8 w-56 bg-card shadow-xs">
+              <InputGroupAddon>
+                <Search aria-hidden strokeWidth={1.6} />
+              </InputGroupAddon>
+              <InputGroupInput
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                aria-label={copy.connected.searchLabel}
+                placeholder={copy.connected.searchPlaceholder}
+                className="text-[13px]"
+              />
+            </InputGroup>
+          ) : null
+        }
+      >
+        {!ready ? (
+          <LoadFailed
+            title={copy.loadFailed.title}
+            body={copy.loadFailed.body}
+            retryLabel={copy.loadFailed.retry}
+            pending={retrying}
+            onRetry={() => startRetry(() => router.refresh())}
+          />
+        ) : sources.length === 0 ? (
+          <Empty className="px-6 py-10">
+            <EmptyHeader>
+              <EmptyMedia
+                variant="icon"
+                className="size-9 border border-border bg-card text-primary shadow-xs"
+              >
+                <Plug strokeWidth={1.6} aria-hidden />
+              </EmptyMedia>
+              <EmptyTitle className="text-sm font-semibold text-foreground">
+                {copy.connected.emptyTitle}
+              </EmptyTitle>
+              <EmptyDescription className="text-[13px]">
+                {copy.connected.emptyBody}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : visible.length === 0 ? (
+          <Empty className="px-6 py-10">
+            <EmptyHeader>
+              <EmptyTitle className="text-sm font-semibold text-foreground">
+                {copy.connected.noMatchTitle}
+              </EmptyTitle>
+              <EmptyDescription className="text-[13px]">
+                {copy.connected.noMatchBody}
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setQuery("");
+                }}
+                className={secondaryButtonClass}
+              >
+                {copy.connected.clear}
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : (
+          <SourcesTable
+            sources={visible}
+            busy={busy}
+            onTest={handleTest}
+            onTestEmail={openDialog("testEmail")}
+            onRename={openDialog("rename")}
+            onSetLimit={openDialog("limit")}
+            onTogglePause={handleTogglePause}
+            onDisconnect={openDialog("disconnect")}
+            onReconnect={handleReconnect}
+          />
+        )}
+      </SectionCard>
+
+      {ready ? (
+        <SectionCard
+          id="integrations-catalog"
+          title={copy.catalog.title}
+          description={copy.catalog.description}
+        >
+          <SourceCatalog onConnect={openSheet} />
+        </SectionCard>
+      ) : null}
+
+      <ConnectSheet
+        open={sheetOpen}
+        integrationId={picked}
+        gmailConnectable={ready && result.connectable.gmail}
+        onPick={setPicked}
+        onOpenChange={setSheetOpen}
+        onConnected={handleConnected}
+      />
+
+      <RenameSourceDialog
+        source={dialogSource("rename")}
+        onClose={closeDialog}
+        onChanged={applySource}
+      />
+      <DailyLimitDialog
+        source={dialogSource("limit")}
+        onClose={closeDialog}
+        onChanged={applySource}
+      />
+      <TestEmailDialog
+        source={dialogSource("testEmail")}
+        onClose={closeDialog}
+        onChanged={applySource}
+      />
+      <DisconnectDialog
+        source={dialogSource("disconnect")}
+        onClose={closeDialog}
+        onChanged={applySource}
+      />
+    </div>
+  );
+}

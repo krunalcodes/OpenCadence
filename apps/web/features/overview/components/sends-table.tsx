@@ -8,9 +8,8 @@ import {
   TableRow,
 } from "@workspace/ui/components/table";
 import Link from "next/link";
-import { StatusBadge } from "@/features/overview/components/status-badge";
+import { type BadgeTone, StatusBadge } from "@/components/status-badge";
 import {
-  type BadgeTone,
   type SendStatus,
   sendsCard,
   type TodaySend,

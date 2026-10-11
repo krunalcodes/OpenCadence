@@ -3,8 +3,7 @@ import type {
   CadenceLane,
 } from "@workspace/ui/blocks/cadence-timeline";
 import type { HealthDay } from "@workspace/ui/blocks/health-strip";
-
-export type BadgeTone = "live" | "success" | "warning" | "danger" | "neutral";
+import type { BadgeTone } from "@/components/status-badge";
 
 export type OverviewRangeId = "24h" | "7d" | "30d" | "90d";
 

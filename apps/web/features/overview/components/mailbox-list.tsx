@@ -1,6 +1,6 @@
 import { HealthStrip } from "@workspace/ui/blocks/health-strip";
 import { Layers, Mail } from "lucide-react";
-import { StatusBadge } from "@/features/overview/components/status-badge";
+import { StatusBadge } from "@/components/status-badge";
 import { type MailboxRow, mailboxesCard } from "@/features/overview/lib/sample";
 
 export function MailboxList({ rows }: { rows: MailboxRow[] }) {

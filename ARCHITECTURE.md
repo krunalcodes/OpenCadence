@@ -47,9 +47,10 @@ OpenCadence/
 │   ├── email-renderer/      merge tags, spintax, template to HTML and text
 │   ├── i18n/                locale catalogs for the app, public pages, emails
 │   └── env/                 environment variable schema and loader
-├── integrations/            one package per mailbox type or provider
-│   ├── core/                the adapter interface and shared test kit
-│   ├── resend/
+├── integrations/            one package per mailbox type or provider  (exists)
+│   ├── core/                the adapter interface and shared test kit (exists)
+│   ├── gmail/                                                         (exists)
+│   ├── resend/                                                        (exists)
 │   ├── ses/
 │   ├── smtp/
 │   ├── imap/
@@ -69,8 +70,8 @@ OpenCadence/
 ```
 
 `integrations/` sits at the top level, beside `packages/`, because it is the
-main place outside contributors add code. It becomes a third workspace glob
-(`integrations/*`) when the first integration is written.
+main place outside contributors add code. It is the third workspace glob
+(`integrations/*`).
 
 ## apps/api
 
@@ -94,11 +95,11 @@ apps/api/
 │   │   ├── pipes/
 │   │   └── pagination/
 │   ├── infra/                     adapters to things outside the process
-│   │   ├── database/
-│   │   ├── redis/
-│   │   ├── queue/
+│   │   ├── database/                                                  (exists)
+│   │   ├── redis/                                                     (exists)
+│   │   ├── queue/                 BullMQ and the queue dashboard      (exists)
 │   │   ├── storage/
-│   │   ├── crypto/
+│   │   ├── crypto/                credential encryption               (exists)
 │   │   ├── i18n/
 │   │   └── logger/
 │   └── modules/                   one folder per domain
@@ -122,12 +123,12 @@ apps/api/
 │       ├── sequences/
 │       ├── transactional/
 │       ├── inbox/                 unified reply inbox
-│       ├── integrations/          connected mailboxes and providers
+│       ├── integrations/          connected mailboxes and providers   (exists)
 │       ├── domains/               sending and tracking domains, DNS checks
 │       ├── warmup/
 │       ├── dispatch/              the send pipeline: limits, rotation, retries
 │       ├── tracking/              open, click, and unsubscribe endpoints
-│       ├── provider-events/       inbound bounce and complaint webhooks
+│       ├── provider-events/       inbound bounce and complaint webhooks (exists)
 │       ├── analytics/             dashboards and reports
 │       ├── webhooks/              outbound webhooks
 │       └── archive/               public newsletter archive and RSS
@@ -351,8 +352,9 @@ the first code depends on them.
 
 1. **Workers share the API codebase** through a second entrypoint, in place
    of a separate `apps/worker`.
-2. **Integrations are a top-level workspace group**, in place of living under
-   `packages/`.
+2. **Decided: integrations are a top-level workspace group** (`integrations/*`),
+   in place of living under `packages/`. Packages are named
+   `@workspace/integration-<name>`.
 3. **API modules are flat**, in place of being grouped into areas such as
    audience and sending.
 4. **Decided: product routes live under `/app`, and the workspace is never

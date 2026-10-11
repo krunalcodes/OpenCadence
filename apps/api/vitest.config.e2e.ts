@@ -13,6 +13,8 @@ export default defineConfig({
       BETTER_AUTH_SECRET: "test-only-secret-that-is-long-enough-0123456789",
       BETTER_AUTH_URL: "http://localhost:3000",
       EMAIL_PROVIDER: "console",
+      CREDENTIALS_ENCRYPTION_KEY:
+        "dGVzdC1vbmx5LWNyZWRlbnRpYWxzLWtleS0wMDAwMDA=",
     },
   },
 });

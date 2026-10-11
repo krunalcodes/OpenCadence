@@ -1,0 +1,555 @@
+"use client";
+
+import { Button } from "@workspace/ui/components/button";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@workspace/ui/components/combobox";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@workspace/ui/components/field";
+import { Input } from "@workspace/ui/components/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@workspace/ui/components/sheet";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@workspace/ui/components/toggle-group";
+import { cn } from "@workspace/ui/lib/utils";
+import { ArrowLeft, ChevronRight, Info } from "lucide-react";
+import { type FormEvent, useState } from "react";
+import { toast } from "sonner";
+import { focusRing } from "@/components/app-shell/page-header";
+import { Spinner } from "@/components/spinner";
+import {
+  comingSoonClass,
+  inputClass,
+  primaryButtonClass,
+  SourceMark,
+  secondaryButtonClass,
+  segmentedGroupClass,
+  segmentedItemClass,
+} from "@/features/integrations/components/integration-parts";
+import { useOrigin } from "@/features/integrations/hooks/use-hydrated";
+import {
+  type ConnectField,
+  findIntegration,
+  formatFeatures,
+  type Integration,
+  type IntegrationId,
+  integrations,
+  type Option,
+  securityOptions,
+  sesRegions,
+} from "@/features/integrations/lib/catalog";
+import { copy, describeError } from "@/features/integrations/lib/copy";
+import type { SendingSource } from "@/features/integrations/lib/sources";
+import {
+  type ApiError,
+  authorizeGmail,
+  connectResend,
+} from "@/features/integrations/queries/mutations";
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function fieldDomId(id: string) {
+  return `connect-${id}`;
+}
+
+function initialValues(integration: Integration) {
+  const values: Record<string, string> = {};
+  for (const field of integration.fields) {
+    if (field.kind === "security") {
+      values[field.id] = securityOptions[0]?.value ?? "";
+    } else if (field.kind === "region") {
+      values[field.id] = "";
+    } else {
+      values[field.id] = field.defaultValue ?? "";
+    }
+  }
+  return values;
+}
+
+function validateField(field: ConnectField, raw: string) {
+  if (field.kind === "security") {
+    return undefined;
+  }
+  const value = field.kind === "password" ? raw : raw.trim();
+  if (value === "") {
+    return "optional" in field && field.optional ? undefined : field.missing;
+  }
+  if (field.kind === "email" && !emailPattern.test(value)) {
+    return copy.sheet.invalidEmail;
+  }
+  if (field.kind === "number") {
+    const number = Number(value);
+    if (
+      !Number.isInteger(number) ||
+      number < 1 ||
+      number > (field.max ?? 65535)
+    ) {
+      return field.missing;
+    }
+  }
+  return undefined;
+}
+
+const apiFieldIds: Record<string, string> = {
+  name: "name",
+  apiKey: "apiKey",
+  dailySendLimit: "dailyLimit",
+};
+
+const errorFieldIds: Record<string, string> = {
+  name_taken: "name",
+  invalid_credentials: "apiKey",
+};
+
+function fieldOfError(error: ApiError) {
+  return errorFieldIds[error.code] ?? apiFieldIds[error.field ?? ""] ?? null;
+}
+
+type ConnectSheetProps = {
+  open: boolean;
+  integrationId: IntegrationId | null;
+  gmailConnectable: boolean;
+  onPick: (id: IntegrationId | null) => void;
+  onOpenChange: (open: boolean) => void;
+  onConnected: (source: SendingSource) => void;
+};
+
+export function ConnectSheet({
+  open,
+  integrationId,
+  gmailConnectable,
+  onPick,
+  onOpenChange,
+  onConnected,
+}: ConnectSheetProps) {
+  const [pending, setPending] = useState(false);
+  const integration = integrationId ? findIntegration(integrationId) : null;
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!pending) {
+          onOpenChange(next);
+        }
+      }}
+    >
+      <SheetContent className="w-full gap-0 text-[13px] data-[side=right]:w-full data-[side=right]:sm:max-w-[460px]">
+        {integration ? (
+          <ConnectForm
+            key={integration.id}
+            integration={integration}
+            blocked={integration.id === "gmail" && !gmailConnectable}
+            pending={pending}
+            onPendingChange={setPending}
+            onBack={() => onPick(null)}
+            onCancel={() => onOpenChange(false)}
+            onConnected={onConnected}
+          />
+        ) : (
+          <>
+            <SheetHeader className="gap-0.5 border-b border-border-subtle px-5 py-4 pr-12">
+              <SheetTitle className="text-[15px] font-semibold tracking-[-0.01em]">
+                {copy.sheet.chooseTitle}
+              </SheetTitle>
+              <SheetDescription className="text-[13px]">
+                {copy.sheet.chooseDescription}
+              </SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+              <ul>
+                {integrations.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      disabled={!item.available}
+                      onClick={() => onPick(item.id)}
+                      className={cn(
+                        "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted disabled:hover:bg-transparent",
+                        focusRing,
+                      )}
+                    >
+                      <SourceMark
+                        integration={item}
+                        className={item.available ? undefined : "opacity-60"}
+                      />
+                      <span
+                        className={cn(
+                          "min-w-0 flex-1",
+                          !item.available && "opacity-60",
+                        )}
+                      >
+                        <span className="block truncate text-[13px] font-medium text-foreground">
+                          {item.name}
+                        </span>
+                        <span className="block truncate text-xs text-ink-tertiary">
+                          {formatFeatures(item.features)}
+                        </span>
+                      </span>
+                      {item.available ? (
+                        <ChevronRight
+                          aria-hidden="true"
+                          strokeWidth={1.6}
+                          className="size-4 shrink-0 text-ink-tertiary"
+                        />
+                      ) : (
+                        <span className={comingSoonClass}>
+                          {copy.catalog.comingSoon}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+type ConnectFormProps = {
+  integration: Integration;
+  blocked: boolean;
+  pending: boolean;
+  onPendingChange: (pending: boolean) => void;
+  onBack: () => void;
+  onCancel: () => void;
+  onConnected: (source: SendingSource) => void;
+};
+
+function ConnectForm({
+  integration,
+  blocked,
+  pending,
+  onPendingChange,
+  onBack,
+  onCancel,
+  onConnected,
+}: ConnectFormProps) {
+  const [values, setValues] = useState(() => initialValues(integration));
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+
+  function update(field: ConnectField, value: string) {
+    setValues((current) => ({ ...current, [field.id]: value }));
+    if (errors[field.id]) {
+      setErrors((current) => ({
+        ...current,
+        [field.id]: validateField(field, value),
+      }));
+    }
+  }
+
+  function showFailure(error: ApiError) {
+    const message = describeError(error);
+    const fieldId = fieldOfError(error);
+    if (fieldId && integration.fields.some((field) => field.id === fieldId)) {
+      setErrors((current) => ({ ...current, [fieldId]: message }));
+      document.getElementById(fieldDomId(fieldId))?.focus();
+      return;
+    }
+    toast.error(copy.sheet.connectFailed(integration.name), {
+      description: message,
+    });
+  }
+
+  async function connect() {
+    if (integration.id === "gmail") {
+      const limit = (values.dailyLimit ?? "").trim();
+      const result = await authorizeGmail(
+        limit === "" ? {} : { dailySendLimit: Number(limit) },
+      );
+      if (result.ok) {
+        window.location.href = result.data.url;
+        return;
+      }
+      onPendingChange(false);
+      showFailure(result.error);
+      return;
+    }
+    const result = await connectResend({
+      name: (values.name ?? "").trim(),
+      apiKey: (values.apiKey ?? "").trim(),
+    });
+    onPendingChange(false);
+    if (result.ok) {
+      onConnected(result.data);
+      return;
+    }
+    showFailure(result.error);
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending || blocked || !integration.available) {
+      return;
+    }
+    const next: Record<string, string | undefined> = {};
+    for (const field of integration.fields) {
+      next[field.id] = validateField(field, values[field.id] ?? "");
+    }
+    setErrors(next);
+    const firstInvalid = integration.fields.find((field) => next[field.id]);
+    if (firstInvalid) {
+      document.getElementById(fieldDomId(firstInvalid.id))?.focus();
+      return;
+    }
+    onPendingChange(true);
+    void connect();
+  }
+
+  return (
+    <form
+      noValidate
+      onSubmit={handleSubmit}
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      <SheetHeader className="gap-3 border-b border-border-subtle px-5 py-4 pr-12">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onBack}
+          className={cn(
+            "-ml-1 inline-flex w-fit items-center gap-1 rounded-[6px] px-1 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50",
+            focusRing,
+          )}
+        >
+          <ArrowLeft
+            aria-hidden="true"
+            strokeWidth={1.6}
+            className="size-3.5"
+          />
+          {copy.sheet.back}
+        </button>
+        <div className="flex items-center gap-2.5">
+          <SourceMark integration={integration} className="size-8" />
+          <div className="min-w-0">
+            <SheetTitle className="truncate text-[15px] font-semibold tracking-[-0.01em]">
+              {copy.sheet.title(integration.name)}
+            </SheetTitle>
+            <p className="truncate text-xs text-ink-tertiary">
+              {formatFeatures(integration.features)}
+            </p>
+          </div>
+        </div>
+      </SheetHeader>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <SheetDescription className="text-[13px] leading-normal text-muted-foreground">
+          {integration.intro}
+        </SheetDescription>
+        <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-4">
+          {integration.fields.map((field) => (
+            <ConnectFieldControl
+              key={field.id}
+              field={field}
+              value={values[field.id] ?? ""}
+              error={errors[field.id]}
+              disabled={pending}
+              onChange={(value) => update(field, value)}
+            />
+          ))}
+        </div>
+        {blocked ? <GmailSetupNotice /> : null}
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-border-subtle px-5 py-4">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending}
+            onClick={onCancel}
+            className={secondaryButtonClass}
+          >
+            {copy.sheet.cancel}
+          </Button>
+          <Button
+            type="submit"
+            disabled={pending || blocked}
+            aria-busy={pending || undefined}
+            className={primaryButtonClass}
+          >
+            {pending ? <Spinner /> : null}
+            {integration.submitLabel}
+          </Button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function GmailSetupNotice() {
+  const origin = useOrigin();
+  return (
+    <div className="mt-4 flex gap-2 rounded-lg bg-info-surface px-3 py-2.5 leading-normal text-foreground">
+      <Info
+        aria-hidden="true"
+        strokeWidth={1.6}
+        className="mt-0.5 size-4 shrink-0 text-info"
+      />
+      <div className="min-w-0">
+        <p>
+          <span className="font-medium text-info">
+            {copy.sheet.gmailSetupTitle}
+          </span>{" "}
+          {copy.sheet.gmailSetupBody}
+        </p>
+        <p className="mt-1.5 font-mono text-[12.5px] break-all select-all">
+          {origin}
+          {copy.sheet.gmailCallbackPath}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+type ConnectFieldControlProps = {
+  field: ConnectField;
+  value: string;
+  error: string | undefined;
+  disabled: boolean;
+  onChange: (value: string) => void;
+};
+
+function ConnectFieldControl({
+  field,
+  value,
+  error,
+  disabled,
+  onChange,
+}: ConnectFieldControlProps) {
+  const id = fieldDomId(field.id);
+  const span = "half" in field && field.half ? "col-span-1" : "col-span-2";
+
+  if (field.kind === "security") {
+    return (
+      <Field className={span}>
+        <span className="text-[13px] leading-snug font-medium">
+          {field.label}
+        </span>
+        <ToggleGroup
+          aria-label={field.label}
+          value={[value]}
+          disabled={disabled}
+          onValueChange={(next) => {
+            if (next[0]) {
+              onChange(next[0]);
+            }
+          }}
+          className={segmentedGroupClass}
+        >
+          {securityOptions.map((option) => (
+            <ToggleGroupItem
+              key={option.value}
+              value={option.value}
+              className={segmentedItemClass}
+            >
+              {option.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </Field>
+    );
+  }
+
+  const hint = field.hint;
+  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+  const message = error ? (
+    <FieldError id={`${id}-error`} className="text-[13px] text-danger">
+      {error}
+    </FieldError>
+  ) : hint ? (
+    <FieldDescription id={`${id}-hint`} className="text-[13px]">
+      {hint}
+    </FieldDescription>
+  ) : null;
+
+  if (field.kind === "region") {
+    const selected =
+      sesRegions.find((option) => option.value === value) ?? null;
+    return (
+      <Field data-invalid={error ? true : undefined} className={span}>
+        <FieldLabel htmlFor={id} className="text-[13px]">
+          {field.label}
+        </FieldLabel>
+        <Combobox
+          items={sesRegions}
+          value={selected}
+          onValueChange={(next: Option | null) => onChange(next?.value ?? "")}
+          disabled={disabled}
+        >
+          <ComboboxInput
+            id={id}
+            placeholder={copy.sheet.regionPlaceholder}
+            disabled={disabled}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
+            className="w-full bg-card text-[13px] shadow-xs"
+          />
+          <ComboboxContent>
+            <ComboboxEmpty>{copy.sheet.regionEmpty}</ComboboxEmpty>
+            <ComboboxList>
+              {(item: Option) => (
+                <ComboboxItem
+                  key={item.value}
+                  value={item}
+                  className="text-[13px]"
+                >
+                  {item.label}
+                </ComboboxItem>
+              )}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+        {message}
+      </Field>
+    );
+  }
+
+  return (
+    <Field data-invalid={error ? true : undefined} className={span}>
+      <FieldLabel htmlFor={id} className="text-[13px]">
+        {field.label}
+      </FieldLabel>
+      <Input
+        id={id}
+        name={field.id}
+        type={field.kind === "number" ? "text" : field.kind}
+        inputMode={field.kind === "number" ? "numeric" : undefined}
+        autoComplete="off"
+        spellCheck={false}
+        required={!field.optional}
+        disabled={disabled}
+        placeholder={field.placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        className={cn(
+          inputClass,
+          field.mono && "font-mono text-[12.5px]",
+          field.kind === "number" && "tabular-nums",
+        )}
+      />
+      {message}
+    </Field>
+  );
+}

@@ -1,5 +1,6 @@
 import { cn } from "@workspace/ui/lib/utils";
-import type { BadgeTone } from "@/features/overview/lib/sample";
+
+export type BadgeTone = "live" | "success" | "warning" | "danger" | "neutral";
 
 const toneClasses: Record<BadgeTone, string> = {
   live: "bg-live text-live-foreground",

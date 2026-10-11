@@ -92,7 +92,18 @@ export const areas: NavArea[] = [
   {
     id: "integrations",
     title: "Integrations",
-    pages: [{ title: "Integrations", path: "integrations", count: "6" }],
+    pages: [
+      {
+        title: "Sources",
+        path: "integrations",
+        keywords: "mailboxes providers gmail outlook smtp resend ses connect",
+      },
+      {
+        title: "Activity log",
+        path: "integrations/activity",
+        keywords: "logs events errors history",
+      },
+    ],
     views: [],
   },
   {
