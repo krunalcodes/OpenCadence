@@ -182,8 +182,10 @@ apps/web/
 │   │   ├── sign-up/
 │   │   └── sso/
 │   ├── (app)/                     the product, behind sign-in
-│   │   └── [workspace]/           every product URL carries the workspace
-│   │       ├── page.tsx           overview
+│   │   └── app/                   every product URL starts with /app  (exists)
+│   │       ├── layout.tsx         reads the active workspace, renders the shell
+│   │       ├── page.tsx           redirects to /app/dashboard
+│   │       ├── dashboard/         overview
 │   │       ├── inbox/
 │   │       ├── campaigns/
 │   │       ├── sequences/
@@ -213,7 +215,7 @@ apps/web/
 │   ├── contacts/
 │   └── ...                        the same shape for every domain
 ├── components/                    composed UI shared across features  (exists)
-│   ├── app-shell/                 sidebar, top bar, workspace switcher
+│   ├── app-shell/                 rail, area panel, top bar, command palette (exists)
 │   ├── command-palette/
 │   └── data-table/                TanStack Table wrapper, filters, bulk bar
 ├── hooks/                         hooks shared across features        (exists)
@@ -228,6 +230,10 @@ Rules:
 - A feature never imports from another feature. Shared code moves up to
   `components/`, `hooks/`, or `lib/`, or to `packages/ui` if it has no
   product knowledge.
+- Product routes live under `(app)/app/...`, so every product URL starts
+  with `/app` (`/app/dashboard`, `/app/campaigns`). No URL contains a
+  workspace identifier. The active workspace is read on the server
+  (`lib/active-workspace.ts`) and passed down from the `/app` layout.
 - The web app never imports `@workspace/db`. It reaches data only through
   the API client.
 
@@ -237,7 +243,7 @@ Rules:
 packages/ui/
 └── src/
     ├── components/                shadcn/ui primitives, restyled      (exists)
-    ├── blocks/                    OpenCadence components built from primitives
+    ├── blocks/                    OpenCadence components built from primitives (exists)
     │   ├── cadence-timeline/
     │   ├── tick-progress/
     │   └── health-strip/
@@ -346,7 +352,12 @@ the first code depends on them.
    `packages/`.
 3. **API modules are flat**, in place of being grouped into areas such as
    audience and sending.
-4. **The workspace is part of every product URL** (`/[workspace]/campaigns`).
+4. **Decided: product routes live under `/app`, and the workspace is never
+   in the URL.** The active workspace comes from the session (the Better
+   Auth active organization). Until authentication is built, the web app
+   keeps it in an httpOnly cookie behind `getActiveWorkspace()` and the
+   `setActiveWorkspace()` server action, so only those two files change
+   when the session replaces the cookie.
 5. **A marketing site and a documentation site are not planned here.** If
    they are wanted later they become `apps/www` and `apps/docs`.
 6. The contents of `packages/db` depend on the ORM, which is still undecided.

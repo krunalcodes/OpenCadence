@@ -1,5 +1,6 @@
 import { cn } from "@workspace/ui/lib/utils";
 import Link from "next/link";
+import { BrandIcon } from "@/components/brand-icon";
 
 function BrandMark({ className }: { className?: string }) {
   return (
@@ -14,18 +15,7 @@ function BrandMark({ className }: { className?: string }) {
         aria-hidden="true"
         className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-live"
       >
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          className="size-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2.2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M3 12h3l3-8 4 16 3-8h5" />
-        </svg>
+        <BrandIcon />
       </span>
       OpenCadence
     </Link>

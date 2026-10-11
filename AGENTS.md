@@ -66,11 +66,11 @@ Decided. Use these; do not introduce alternatives without asking.
 | Data tables | TanStack Table (React Table) |
 | AI features | Vercel AI SDK |
 | Sending integrations | Resend and Amazon SES first; then Gmail, Outlook, IMAP/SMTP mailboxes and SendGrid-style providers, all behind the adapter interface |
+| Authentication | Better Auth (planned; active workspace kept in the session) |
 | Tooling | Turborepo, Bun, TypeScript, Biome |
 
 Not decided yet, so ask before picking: ORM or query layer and migration
-tool, authentication (must support OIDC single sign-on), the i18n library,
-the email builder/editor, and deployment packaging.
+tool, the i18n library, the email builder/editor, and deployment packaging.
 
 ## Repository
 
@@ -117,6 +117,7 @@ A lefthook pre-commit hook runs Biome on staged files and re-stages fixes.
   No ESLint or Prettier. Run `bun run format` before finishing.
 - Conventional Commits. Use the `caveman-commit` skill to commit.
 - Use `bun`, not `npm` or `npx` (the repo pins Bun via `devEngines`).
+- Product URLs live under `/app` and never contain a workspace identifier.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

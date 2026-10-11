@@ -196,11 +196,27 @@ Weights in use are 400, 500, and 600. Do not go heavier.
 
 ## Layout
 
-- App shell: a fixed 244px sidebar on the left, a 52px sticky top bar, and a
-  scrolling content area with 28px side padding and a 1240px maximum width.
-- Sidebar order: workspace switcher, search (opens the command palette),
-  then navigation grouped as Send, Audience, and Sending, with counts on the
-  right of each item.
+- App shell ("rail and panel"): a 60px dark evergreen rail on the far left
+  that starts with the OpenCadence logo and then holds one icon per area; a
+  232px light panel beside it with the workspace switcher at the top, then
+  the current area's pages and saved views; then the content column with a
+  52px sticky top bar and 28px side padding (16px on narrow screens). The
+  content column is full width with no maximum, so every screen must lay
+  itself out to use wide windows well. Only the content column scrolls. The
+  panel collapses with its button or Cmd/Ctrl+B.
+- The logo on the rail is a 32px evergreen tile with the lime cadence line
+  and a subtle ring. It links to the overview.
+- The workspace switcher is a full-width button showing the active
+  workspace's initial, name, and plan. It opens a searchable list that stays
+  comfortable with many workspaces, with "Create workspace" at the end.
+  When the panel is collapsed, the switcher moves to the top bar as a small
+  initial button. Workspaces never appear on the rail.
+- Areas on the rail: Home, Inbox, Send, Audience, Deliverability,
+  Integrations, with Settings and the user menu at the bottom. Below the
+  switcher the panel shows the area title and collapse button, then a search
+  field that opens the command palette (Cmd/Ctrl+K).
+- The rail uses the `rail` colour tokens. It is the only dark surface in
+  the product.
 - Top bar: breadcrumb on the left; secondary action, primary action, and the
   user menu on the right. One primary action per screen.
 - Content rhythm: 18px between cards, 16px inside cards, more space above a

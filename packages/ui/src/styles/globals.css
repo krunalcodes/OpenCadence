@@ -9,6 +9,10 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
+  --color-rail: var(--rail);
+  --color-rail-foreground: var(--rail-foreground);
+  --color-rail-active: var(--rail-active);
+  --color-rail-border: var(--rail-border);
   --color-brand-hover: var(--brand-hover);
   --color-ink-tertiary: var(--ink-tertiary);
   --color-border-subtle: var(--border-subtle);
@@ -98,6 +102,10 @@
   --sidebar-accent-foreground: #14201b;
   --sidebar-border: #e3e7e0;
   --sidebar-ring: #0f5c4d;
+  --rail: #0f2a24;
+  --rail-foreground: #9fb8ae;
+  --rail-active: #1c4038;
+  --rail-border: #244a41;
   --brand-hover: #0b4a3e;
   --ink-tertiary: #85918a;
   --border-subtle: #eef1eb;

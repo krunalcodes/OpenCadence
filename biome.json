@@ -58,7 +58,8 @@
           "a11y": {
             "useSemanticElements": "off",
             "noLabelWithoutControl": "off",
-            "useKeyWithClickEvents": "off"
+            "useKeyWithClickEvents": "off",
+            "useFocusableInteractive": "off"
           }
         }
       }
