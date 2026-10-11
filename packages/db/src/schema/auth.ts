@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -24,6 +25,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -155,11 +157,79 @@ export const workspaceInvitations = pgTable(
   ],
 );
 
+export const twoFactors = pgTable(
+  "two_factors",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    verified: boolean("verified").default(true).notNull(),
+    failedVerificationCount: integer("failed_verification_count")
+      .default(0)
+      .notNull(),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  },
+  (table) => [index("two_factors_user_id_idx").on(table.userId)],
+);
+
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    configId: text("config_id").default("default").notNull(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name"),
+    start: text("start"),
+    prefix: text("prefix"),
+    key: text("key").notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    permissions: text("permissions"),
+    metadata: text("metadata"),
+    rateLimitEnabled: boolean("rate_limit_enabled").default(true).notNull(),
+    rateLimitTimeWindow: integer("rate_limit_time_window").default(86400000),
+    rateLimitMax: integer("rate_limit_max").default(10),
+    requestCount: integer("request_count").default(0).notNull(),
+    remaining: integer("remaining"),
+    refillInterval: integer("refill_interval"),
+    refillAmount: integer("refill_amount"),
+    lastRefillAt: timestamp("last_refill_at", { withTimezone: true }),
+    lastRequest: timestamp("last_request", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("api_keys_key_uidx").on(table.key),
+    index("api_keys_workspace_id_idx").on(table.workspaceId),
+    index("api_keys_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   accounts: many(accounts),
   workspaceMembers: many(workspaceMembers),
   workspaceInvitations: many(workspaceInvitations),
+  twoFactors: many(twoFactors),
+}));
+
+export const twoFactorsRelations = relations(twoFactors, ({ one }) => ({
+  users: one(users, {
+    fields: [twoFactors.userId],
+    references: [users.id],
+  }),
+}));
+
+export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+  workspaces: one(workspaces, {
+    fields: [apiKeys.workspaceId],
+    references: [workspaces.id],
+  }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -183,6 +253,7 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
 export const workspacesRelations = relations(workspaces, ({ many }) => ({
   workspaceMembers: many(workspaceMembers),
   workspaceInvitations: many(workspaceInvitations),
+  apiKeys: many(apiKeys),
 }));
 
 export const workspaceMembersRelations = relations(

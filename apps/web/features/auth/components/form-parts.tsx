@@ -10,7 +10,7 @@ import {
 } from "@workspace/ui/components/input-group";
 import { cn } from "@workspace/ui/lib/utils";
 import { Check, Circle, Eye, EyeOff, Info } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Spinner } from "@/components/spinner";
 import { attempt, authClient, describeAuthError } from "@/lib/auth-client";
@@ -134,13 +134,46 @@ function GoogleIcon() {
   );
 }
 
-function GoogleButton({ disabled }: { disabled?: boolean }) {
+function LastUsedBadge({ tone }: { tone: "onBrand" | "onCard" }) {
+  return (
+    <span
+      className={cn(
+        "pointer-events-none absolute top-1/2 right-2 inline-flex h-5 -translate-y-1/2 items-center rounded-[6px] px-1.5 font-medium text-[11px]",
+        tone === "onBrand"
+          ? "bg-primary-foreground/15 text-primary-foreground"
+          : "bg-border-subtle text-muted-foreground",
+      )}
+    >
+      Last used
+    </span>
+  );
+}
+
+function useLastUsedLoginMethod() {
+  const [method, setMethod] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMethod(authClient.getLastUsedLoginMethod());
+  }, []);
+
+  return method;
+}
+
+function GoogleButton({
+  disabled,
+  callbackURL = "/app",
+  lastUsed = false,
+}: {
+  disabled?: boolean;
+  callbackURL?: string;
+  lastUsed?: boolean;
+}) {
   const [pending, setPending] = useState(false);
 
   async function handleClick() {
     setPending(true);
     const { error } = await attempt(() =>
-      authClient.signIn.social({ provider: "google", callbackURL: "/app" }),
+      authClient.signIn.social({ provider: "google", callbackURL }),
     );
     if (error) {
       setPending(false);
@@ -157,13 +190,14 @@ function GoogleButton({ disabled }: { disabled?: boolean }) {
     <Button
       type="button"
       variant="outline"
-      className={secondaryButtonClass}
+      className={cn(secondaryButtonClass, "relative")}
       disabled={pending || disabled}
       aria-busy={pending || undefined}
       onClick={handleClick}
     >
       {pending ? <Spinner /> : <GoogleIcon />}
       Continue with Google
+      {lastUsed ? <LastUsedBadge tone="onCard" /> : null}
     </Button>
   );
 }
@@ -248,9 +282,12 @@ export {
   AuthHeader,
   errorClass,
   FormNotice,
+  focusRing,
   GoogleButton,
+  GoogleIcon,
   inputClass,
   isEmail,
+  LastUsedBadge,
   labelClass,
   linkClass,
   minPasswordLength,
@@ -258,5 +295,6 @@ export {
   PasswordRequirement,
   primaryButtonClass,
   secondaryButtonClass,
+  useLastUsedLoginMethod,
   validateNewPassword,
 };

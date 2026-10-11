@@ -13,7 +13,9 @@ import { attempt, authClient, describeAuthError } from "@/lib/auth-client";
 import {
   appPathFromPathname,
   defaultPagePath,
+  findActivePage,
   findPage,
+  isNestedPage,
 } from "@/lib/navigation";
 import type { Workspace } from "@/lib/session";
 
@@ -154,7 +156,7 @@ export function AppShell({
   }, [togglePanel]);
 
   const current =
-    findPage(appPathFromPathname(pathname)) ?? findPage(defaultPagePath);
+    findActivePage(appPathFromPathname(pathname)) ?? findPage(defaultPagePath);
 
   if (!current) {
     return <>{children}</>;
@@ -200,6 +202,7 @@ export function AppShell({
           onSwitchWorkspace={switchWorkspace}
           onCreateWorkspace={openCreateWorkspace}
           pageTitle={page.title}
+          areaTitle={isNestedPage(page) ? area.title : undefined}
           panelCollapsed={panelCollapsed}
           onExpandPanel={() => setPanel(false)}
           onOpenMobileNav={() => setMobileNavOpen(true)}

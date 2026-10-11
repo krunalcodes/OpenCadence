@@ -66,7 +66,7 @@ Decided. Use these; do not introduce alternatives without asking.
 | Data tables | TanStack Table (React Table) |
 | AI features | Vercel AI SDK |
 | Sending integrations | Resend and Amazon SES first; then Gmail, Outlook, IMAP/SMTP mailboxes and SendGrid-style providers, all behind the adapter interface |
-| Authentication | Better Auth (`@workspace/auth`), served by the API at `/api/auth` and proxied by Next; email and password, Google, organization plugin (workspaces) |
+| Authentication | Better Auth (`@workspace/auth`), served by the API at `/api/auth` and proxied by Next; email and password, Google, and the organization (workspaces), two-factor, API key (workspace-owned), Have I Been Pwned and last login method plugins |
 | System email | React Email with Tailwind (`@workspace/email`); Resend and console providers |
 | Package builds | tsdown |
 | API configuration | `@nestjs/config`, one root `.env` |
@@ -139,6 +139,11 @@ A lefthook pre-commit hook runs Biome on staged files and re-stages fixes.
   the extensions at compile time.
 - Every API route requires a session by default (global auth guard). Mark
   public routes with `@AllowAnonymous()`.
+- API routes that accept a workspace API key use `@WorkspaceAuth("session",
+  "apiKey")` and read the workspace from `@CurrentWorkspace()`. Keys are
+  sent in the `x-api-key` header.
+- Settings pages are built from `SettingsStack` and `SettingsSection` in
+  `apps/web/features/settings/components`.
 - Emails link to web pages (`/verify-email`, `/reset-password`), never to
   `/api/auth` URLs.
 - Show a spinner inside any button that is waiting on a request, and a

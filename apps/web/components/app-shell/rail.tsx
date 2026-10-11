@@ -21,7 +21,13 @@ import { toast } from "sonner";
 import { areaIcons } from "@/components/app-shell/page-header";
 import { BrandIcon } from "@/components/brand-icon";
 import { Spinner } from "@/components/spinner";
-import { type AreaId, appHref, areas, defaultPagePath } from "@/lib/navigation";
+import {
+  type AreaId,
+  appHref,
+  areaHref,
+  areas,
+  defaultPagePath,
+} from "@/lib/navigation";
 
 const railFocus =
   "focus-visible:outline-2 focus-visible:outline-rail-foreground";
@@ -126,7 +132,7 @@ export function Rail({ activeAreaId, user, signingOut, onSignOut }: RailProps) {
           <TooltipTrigger
             render={
               <Link
-                href={appHref("settings")}
+                href={areaHref("settings")}
                 aria-label="Settings"
                 aria-current={settingsActive ? "true" : undefined}
               />
@@ -187,7 +193,7 @@ export function Rail({ activeAreaId, user, signingOut, onSignOut }: RailProps) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="gap-2 px-2 py-1.5 text-[13px]"
-              render={<Link href={appHref("settings")} />}
+              render={<Link href={areaHref("settings")} />}
             >
               <Settings strokeWidth={1.6} aria-hidden />
               Settings

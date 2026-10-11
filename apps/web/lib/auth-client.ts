@@ -29,3 +29,8 @@ export function describeAuthError(error: AuthError, fallback: string) {
   }
   return fallback;
 }
+
+export const breachedPasswordCode = "PASSWORD_COMPROMISED";
+
+export const breachedPasswordMessage =
+  "This password has appeared in a data breach, so it is not safe to use. Choose a different one.";

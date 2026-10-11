@@ -1,5 +1,6 @@
 import {
   Activity,
+  Building2,
   ClipboardList,
   Code,
   File,
@@ -8,13 +9,17 @@ import {
   Globe,
   HeartPulse,
   Inbox,
+  KeyRound,
   LayoutDashboard,
   LayoutTemplate,
   type LucideIcon,
   Mail,
   Plug,
   Settings,
+  ShieldCheck,
+  UserRound,
   Users,
+  UsersRound,
 } from "lucide-react";
 import type { AreaId } from "@/lib/navigation";
 
@@ -48,6 +53,11 @@ const pageIcons: Record<string, LucideIcon> = {
   domains: Globe,
   integrations: Plug,
   settings: Settings,
+  "settings/account": UserRound,
+  "settings/security": ShieldCheck,
+  "settings/workspace": Building2,
+  "settings/members": UsersRound,
+  "settings/api-keys": KeyRound,
 };
 
 export function pageIcon(path: string): LucideIcon {

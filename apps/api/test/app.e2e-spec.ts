@@ -36,6 +36,22 @@ describe("AppController (e2e)", () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it("/v1/workspace (GET) rejects a request without a session or API key", async () => {
+    const response = await app.inject({ method: "GET", url: "/v1/workspace" });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("/v1/workspace (GET) rejects an unknown API key", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/workspace",
+      headers: { "x-api-key": `oc_${"a".repeat(64)}` },
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
   it("/api/auth/ok (GET) is served outside versioning", async () => {
     const response = await app.inject({ method: "GET", url: "/api/auth/ok" });
 

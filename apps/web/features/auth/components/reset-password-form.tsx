@@ -17,14 +17,22 @@ import {
   primaryButtonClass,
   validateNewPassword,
 } from "@/features/auth/components/form-parts";
-import { attempt, authClient, describeAuthError } from "@/lib/auth-client";
+import {
+  attempt,
+  authClient,
+  breachedPasswordCode,
+  breachedPasswordMessage,
+  describeAuthError,
+} from "@/lib/auth-client";
 
 function ResetPasswordForm({
   token,
   linkInvalid,
+  signedIn = false,
 }: {
   token: string | null;
   linkInvalid: boolean;
+  signedIn?: boolean;
 }) {
   const router = useRouter();
   const [password, setPassword] = useState("");
@@ -50,15 +58,22 @@ function ResetPasswordForm({
     );
     if (!result.error) {
       toast.success("Password updated", {
-        description: "Sign in with your new password.",
+        description: signedIn
+          ? "Use it the next time you sign in."
+          : "Sign in with your new password.",
       });
-      router.push("/sign-in");
+      router.push(signedIn ? "/app/settings/security" : "/sign-in");
+      router.refresh();
       return;
     }
     setPending(false);
     switch (result.error.code) {
       case "INVALID_TOKEN":
         setExpired(true);
+        return;
+      case breachedPasswordCode:
+        setError(breachedPasswordMessage);
+        document.getElementById("reset-password-new")?.focus();
         return;
       case "PASSWORD_TOO_SHORT":
         setError("That password is too short. Add more characters.");

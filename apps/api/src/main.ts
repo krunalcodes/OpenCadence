@@ -6,7 +6,9 @@ import {
 } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { apiReference } from "@scalar/nestjs-api-reference";
+import { API_KEY_HEADER } from "@workspace/auth";
 import { AppModule } from "./app/app.module";
+import { API_KEY_SECURITY } from "./common/decorators/workspace-auth.decorator";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -26,6 +28,17 @@ async function bootstrap() {
     .setTitle("OpenCadence API")
     .setDescription("API for the OpenCadence email platform")
     .setVersion("1")
+    .addCookieAuth("better-auth.session_token")
+    .addApiKey(
+      {
+        type: "apiKey",
+        in: "header",
+        name: API_KEY_HEADER,
+        description:
+          "A workspace API key. Create one under Settings, API keys. The key acts for the workspace that owns it.",
+      },
+      API_KEY_SECURITY,
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   app.use("/docs", apiReference({ content: document, withFastify: true }));

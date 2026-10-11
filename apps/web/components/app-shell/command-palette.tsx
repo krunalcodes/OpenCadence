@@ -63,6 +63,7 @@ export function CommandPalette({
                   <CommandItem
                     key={page.path}
                     value={`page ${area.title} ${page.title}`}
+                    keywords={page.keywords?.split(" ")}
                     onSelect={() => go(appHref(page.path))}
                     className="text-[13px]"
                   >

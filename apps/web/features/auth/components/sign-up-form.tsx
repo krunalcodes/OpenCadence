@@ -28,7 +28,14 @@ import {
   validateNewPassword,
 } from "@/features/auth/components/form-parts";
 import { VerifyEmailPanel } from "@/features/auth/components/verify-email-panel";
-import { attempt, authClient, describeAuthError } from "@/lib/auth-client";
+import {
+  attempt,
+  authClient,
+  breachedPasswordCode,
+  breachedPasswordMessage,
+  describeAuthError,
+} from "@/lib/auth-client";
+import { rememberPendingRedirect, withRedirect } from "@/lib/redirect";
 
 type Values = {
   name: string;
@@ -63,7 +70,7 @@ function validate(field: FieldName, values: Values) {
   }
 }
 
-function SignUpForm() {
+function SignUpForm({ redirect }: { redirect: string | null }) {
   const [values, setValues] = useState<Values>({
     name: "",
     email: "",
@@ -123,10 +130,14 @@ function SignUpForm() {
     );
     setPending(false);
     if (!error) {
+      rememberPendingRedirect(redirect);
       setSentTo(email);
       return;
     }
     switch (error.code) {
+      case breachedPasswordCode:
+        showFieldError("password", breachedPasswordMessage);
+        return;
       case "USER_ALREADY_EXISTS":
       case "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL":
         showFieldError(
@@ -310,12 +321,12 @@ function SignUpForm() {
           Create account
         </Button>
         <FieldSeparator className="my-0 text-[13px]">or</FieldSeparator>
-        <GoogleButton disabled={pending} />
+        <GoogleButton disabled={pending} callbackURL={redirect ?? "/app"} />
       </div>
 
       <p className="mt-6 text-[13px] text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/sign-in" className={linkClass}>
+        <Link href={withRedirect("/sign-in", redirect)} className={linkClass}>
           Sign in
         </Link>
       </p>

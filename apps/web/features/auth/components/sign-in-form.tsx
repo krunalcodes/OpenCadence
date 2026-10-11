@@ -20,13 +20,16 @@ import {
   GoogleButton,
   inputClass,
   isEmail,
+  LastUsedBadge,
   labelClass,
   linkClass,
   PasswordInput,
   primaryButtonClass,
+  useLastUsedLoginMethod,
 } from "@/features/auth/components/form-parts";
 import { VerifyEmailPanel } from "@/features/auth/components/verify-email-panel";
 import { attempt, authClient, describeAuthError } from "@/lib/auth-client";
+import { withRedirect } from "@/lib/redirect";
 
 type Errors = { email?: string; password?: string };
 
@@ -47,8 +50,9 @@ function validatePassword(value: string) {
   return undefined;
 }
 
-function SignInForm() {
+function SignInForm({ redirect }: { redirect: string | null }) {
   const router = useRouter();
+  const lastUsed = useLastUsedLoginMethod();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Errors>({});
@@ -75,11 +79,15 @@ function SignInForm() {
     }
 
     setPending(true);
-    const { error } = await attempt(() =>
+    const { data, error } = await attempt(() =>
       authClient.signIn.email({ email: email.trim(), password }),
     );
     if (!error) {
-      router.push("/app");
+      if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+        window.location.assign(withRedirect("/two-factor", redirect));
+        return;
+      }
+      router.push(redirect ?? "/app");
       router.refresh();
       return;
     }
@@ -196,20 +204,25 @@ function SignInForm() {
       <div className="mt-5 flex flex-col gap-4">
         <Button
           type="submit"
-          className={primaryButtonClass}
+          className={`relative ${primaryButtonClass}`}
           disabled={pending}
           aria-busy={pending || undefined}
         >
           {pending ? <Spinner /> : null}
           Sign in
+          {lastUsed === "email" ? <LastUsedBadge tone="onBrand" /> : null}
         </Button>
         <FieldSeparator className="my-0 text-[13px]">or</FieldSeparator>
-        <GoogleButton disabled={pending} />
+        <GoogleButton
+          disabled={pending}
+          callbackURL={redirect ?? "/app"}
+          lastUsed={lastUsed === "google"}
+        />
       </div>
 
       <p className="mt-6 text-[13px] text-muted-foreground">
         New to OpenCadence?{" "}
-        <Link href="/sign-up" className={linkClass}>
+        <Link href={withRedirect("/sign-up", redirect)} className={linkClass}>
           Create an account
         </Link>
       </p>

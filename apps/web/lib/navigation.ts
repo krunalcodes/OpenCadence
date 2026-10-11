@@ -11,6 +11,7 @@ export type NavPage = {
   title: string;
   path: string;
   count?: string;
+  keywords?: string;
 };
 
 export type NavView = {
@@ -97,7 +98,33 @@ export const areas: NavArea[] = [
   {
     id: "settings",
     title: "Settings",
-    pages: [{ title: "Settings", path: "settings" }],
+    pages: [
+      {
+        title: "Account",
+        path: "settings/account",
+        keywords: "profile name email connected accounts google",
+      },
+      {
+        title: "Security",
+        path: "settings/security",
+        keywords: "password two-factor 2fa authenticator sessions devices",
+      },
+      {
+        title: "Workspace",
+        path: "settings/workspace",
+        keywords: "general name rename delete",
+      },
+      {
+        title: "Members",
+        path: "settings/members",
+        keywords: "team people invitations invite roles",
+      },
+      {
+        title: "API keys",
+        path: "settings/api-keys",
+        keywords: "tokens developers",
+      },
+    ],
     views: [],
   },
 ];
@@ -110,6 +137,30 @@ export function findPage(path: string) {
     }
   }
   return null;
+}
+
+export function findActivePage(path: string) {
+  const segments = path.split("/").filter(Boolean);
+  for (let length = segments.length; length > 0; length -= 1) {
+    const found = findPage(segments.slice(0, length).join("/"));
+    if (found) {
+      return found;
+    }
+  }
+  const area = areas.find((item) =>
+    item.pages.some((page) => page.path.startsWith(`${segments[0]}/`)),
+  );
+  const first = area?.pages[0];
+  return area && first && segments.length === 1 ? { area, page: first } : null;
+}
+
+export function areaHref(id: AreaId) {
+  const first = areas.find((area) => area.id === id)?.pages[0];
+  return appHref(first?.path ?? defaultPagePath);
+}
+
+export function isNestedPage(page: NavPage) {
+  return page.path.includes("/");
 }
 
 export const defaultPagePath = "dashboard";

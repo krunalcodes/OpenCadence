@@ -23,6 +23,7 @@ import {
   authClient,
   describeAuthError,
 } from "@/lib/auth-client";
+import { takePendingRedirect } from "@/lib/redirect";
 
 const verifications = new Map<string, Promise<AuthError | null>>();
 
@@ -149,7 +150,13 @@ function RequestNewLink({ unreachable }: { unreachable: boolean }) {
 
 type Status = "verifying" | "invalid" | "unreachable";
 
-function VerifyEmail({ token }: { token: string | null }) {
+function VerifyEmail({
+  token,
+  redirect,
+}: {
+  token: string | null;
+  redirect: string | null;
+}) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>(token ? "verifying" : "invalid");
 
@@ -163,7 +170,7 @@ function VerifyEmail({ token }: { token: string | null }) {
         return;
       }
       if (!error) {
-        router.replace("/app");
+        router.replace(redirect ?? takePendingRedirect() ?? "/app");
         router.refresh();
         return;
       }
@@ -174,7 +181,7 @@ function VerifyEmail({ token }: { token: string | null }) {
     return () => {
       active = false;
     };
-  }, [token, router]);
+  }, [token, redirect, router]);
 
   if (status === "verifying") {
     return (

@@ -3,8 +3,13 @@ import { createElement } from "react";
 import { createConsoleProvider } from "./providers/console";
 import type { EmailProvider } from "./providers/provider";
 import { createResendProvider } from "./providers/resend";
+import { ChangeEmail, changeEmailCopy } from "./templates/change-email";
 import { ResetPassword, resetPasswordCopy } from "./templates/reset-password";
 import { VerifyEmail, verifyEmailCopy } from "./templates/verify-email";
+import {
+  WorkspaceInvitation,
+  workspaceInvitationCopy,
+} from "./templates/workspace-invitation";
 
 export type MailerConfig = {
   provider: "console" | "resend";
@@ -19,9 +24,30 @@ export type ActionEmailInput = {
   expiresIn?: string;
 };
 
+export type WorkspaceInvitationEmailInput = {
+  to: string;
+  inviterName: string;
+  workspaceName: string;
+  role: string;
+  url: string;
+  expiresIn?: string;
+};
+
+export type EmailChangeEmailInput = {
+  to: string;
+  name: string;
+  newEmail: string;
+  url: string;
+  expiresIn?: string;
+};
+
 export type Mailer = {
   sendVerificationEmail(input: ActionEmailInput): Promise<void>;
   sendPasswordResetEmail(input: ActionEmailInput): Promise<void>;
+  sendWorkspaceInvitationEmail(
+    input: WorkspaceInvitationEmailInput,
+  ): Promise<void>;
+  sendEmailChangeEmail(input: EmailChangeEmailInput): Promise<void>;
 };
 
 function createProvider(config: MailerConfig): EmailProvider {
@@ -75,6 +101,33 @@ export function createMailer(config: MailerConfig): Mailer {
         to,
         resetPasswordCopy.subject,
         createElement(ResetPassword, { name, url, expiresIn }),
+      );
+    },
+    sendWorkspaceInvitationEmail({
+      to,
+      inviterName,
+      workspaceName,
+      role,
+      url,
+      expiresIn,
+    }) {
+      return deliver(
+        to,
+        workspaceInvitationCopy.subject(workspaceName),
+        createElement(WorkspaceInvitation, {
+          inviterName,
+          workspaceName,
+          role,
+          url,
+          expiresIn,
+        }),
+      );
+    },
+    sendEmailChangeEmail({ to, name, newEmail, url, expiresIn }) {
+      return deliver(
+        to,
+        changeEmailCopy.subject,
+        createElement(ChangeEmail, { name, newEmail, url, expiresIn }),
       );
     },
   };

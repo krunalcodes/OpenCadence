@@ -24,6 +24,7 @@ type TopBarProps = {
   onSwitchWorkspace: (id: string) => void;
   onCreateWorkspace: () => void;
   pageTitle: string;
+  areaTitle?: string;
   panelCollapsed: boolean;
   onExpandPanel: () => void;
   onOpenMobileNav: () => void;
@@ -36,6 +37,7 @@ export function TopBar({
   onSwitchWorkspace,
   onCreateWorkspace,
   pageTitle,
+  areaTitle,
   panelCollapsed,
   onExpandPanel,
   onOpenMobileNav,
@@ -92,6 +94,16 @@ export function TopBar({
         <span aria-hidden className="hidden text-ink-tertiary sm:inline">
           /
         </span>
+        {areaTitle ? (
+          <>
+            <span className="hidden shrink-0 text-muted-foreground sm:inline">
+              {areaTitle}
+            </span>
+            <span aria-hidden className="hidden text-ink-tertiary sm:inline">
+              /
+            </span>
+          </>
+        ) : null}
         <span className="min-w-0 truncate font-medium text-foreground">
           {pageTitle}
         </span>
