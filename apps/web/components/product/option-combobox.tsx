@@ -9,7 +9,7 @@ import {
   ComboboxList,
 } from "@workspace/ui/components/combobox";
 import { cn } from "@workspace/ui/lib/utils";
-import { type Option, sameOption } from "@/features/contacts/lib/contacts";
+import { type Option, sameOption } from "@/components/product/option";
 
 type OptionComboboxProps = {
   id?: string;

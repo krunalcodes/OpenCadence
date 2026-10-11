@@ -20,6 +20,8 @@ import Link from "next/link";
 import { type FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { focusRing } from "@/components/app-shell/page-header";
+import { OptionCombobox } from "@/components/product/option-combobox";
+import { OptionMultiSelect } from "@/components/product/option-multi-select";
 import {
   inputClass,
   primaryButtonClass,
@@ -31,8 +33,6 @@ import {
   CustomFieldControl,
   customFieldId,
 } from "@/features/contacts/components/custom-field-control";
-import { OptionCombobox } from "@/features/contacts/components/option-combobox";
-import { OptionMultiSelect } from "@/features/contacts/components/option-multi-select";
 import {
   type Contact,
   type ContactField,

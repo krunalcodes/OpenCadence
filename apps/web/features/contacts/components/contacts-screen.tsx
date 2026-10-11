@@ -26,6 +26,7 @@ import {
   FilterChips,
 } from "@/components/product/filter-chips";
 import { LoadFailed } from "@/components/product/load-failed";
+import { OptionCombobox } from "@/components/product/option-combobox";
 import {
   linkButtonClass,
   primaryButtonClass,
@@ -42,7 +43,6 @@ import { ContactsTable } from "@/features/contacts/components/contacts-table";
 import { DeleteContactDialog } from "@/features/contacts/components/delete-contact-dialog";
 import { FieldsSheet } from "@/features/contacts/components/fields-sheet";
 import { MatchCount } from "@/features/contacts/components/match-count";
-import { OptionCombobox } from "@/features/contacts/components/option-combobox";
 import { useSynced } from "@/features/contacts/hooks/use-synced";
 import {
   type BulkAction,

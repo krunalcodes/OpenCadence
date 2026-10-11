@@ -36,6 +36,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
       workspaces={workspaces}
       activeWorkspaceId={session.session.activeOrganizationId ?? null}
       viewCounts={{ "warming-up": warmup?.warming }}
+      warmup={warmup}
     >
       {children}
     </AppShell>

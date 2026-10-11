@@ -1,3 +1,4 @@
+import type { Option } from "@/components/product/option";
 import { countOf, isRow, type Row, rowsOf, textOrNull } from "@/lib/api";
 
 export type ImportStatus =
@@ -45,7 +46,7 @@ export type StartInput = {
   tagIds: string[];
 };
 
-export type Option = { value: string; label: string };
+export type { Option } from "@/components/product/option";
 
 export type FieldOption = { key: string; label: string };
 

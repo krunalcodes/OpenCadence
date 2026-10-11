@@ -34,6 +34,7 @@ import { type FormEvent, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { buttonFocusRing } from "@/components/app-shell/page-header";
 import { LoadFailed } from "@/components/product/load-failed";
+import { OptionCombobox } from "@/components/product/option-combobox";
 import {
   dangerButtonClass,
   dialogActionsClass,
@@ -46,7 +47,6 @@ import {
 } from "@/components/product/styles";
 import { Spinner } from "@/components/spinner";
 import { TokenInput } from "@/components/token-input";
-import { OptionCombobox } from "@/features/contacts/components/option-combobox";
 import {
   type ContactField,
   type FieldType,

@@ -34,35 +34,24 @@ export const areas: NavArea[] = [
     id: "home",
     title: "Home",
     pages: [{ title: "Overview", path: "dashboard" }],
-    views: [
-      { title: "Sending now", tone: "live", count: "3" },
-      { title: "Scheduled this week", tone: "warning", count: "7" },
-    ],
+    views: [],
   },
   {
     id: "inbox",
     title: "Inbox",
-    pages: [{ title: "Inbox", path: "inbox", count: "18" }],
-    views: [
-      { title: "Interested", tone: "live", count: "6" },
-      { title: "Out of office", tone: "warning", count: "4" },
-      { title: "Not now", tone: "neutral", count: "8" },
-    ],
+    pages: [{ title: "Inbox", path: "inbox" }],
+    views: [],
   },
   {
     id: "send",
     title: "Send",
     pages: [
-      { title: "Campaigns", path: "campaigns", count: "12" },
-      { title: "Sequences", path: "sequences", count: "5" },
+      { title: "Campaigns", path: "campaigns" },
+      { title: "Sequences", path: "sequences" },
       { title: "Transactional", path: "transactional" },
       { title: "Templates", path: "templates" },
     ],
-    views: [
-      { title: "Sending now", tone: "live", count: "3" },
-      { title: "Scheduled this week", tone: "warning", count: "7" },
-      { title: "Drafts", tone: "neutral", count: "4" },
-    ],
+    views: [],
   },
   {
     id: "audience",
@@ -83,15 +72,11 @@ export const areas: NavArea[] = [
           "suppressed blocked blocklist unsubscribes bounces complaints",
       },
     ],
-    views: [
-      { title: "Active customers", tone: "live", count: "3,482" },
-      { title: "Unsubscribed", tone: "neutral", count: "1,932" },
-    ],
+    views: [],
   },
   {
     id: "deliverability",
     title: "Deliverability",
-    attention: true,
     pages: [
       { title: "Health", path: "deliverability" },
       { title: "Domains", path: "domains" },
@@ -101,10 +86,7 @@ export const areas: NavArea[] = [
         keywords: "warmup warm up inbox placement reputation ramp spam",
       },
     ],
-    views: [
-      { title: "Failing checks", tone: "danger", count: "1" },
-      { id: "warming-up", title: "Warming up", tone: "live" },
-    ],
+    views: [{ id: "warming-up", title: "Warming up", tone: "live" }],
   },
   {
     id: "integrations",

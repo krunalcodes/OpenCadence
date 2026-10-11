@@ -8,6 +8,8 @@ export type WarmupSummary = {
   warming: number;
   todaySent: number;
   todayTarget: number;
+  earliestDay: number | null;
+  readyAfterDays: number;
 };
 
 function count(value: unknown) {
@@ -29,6 +31,8 @@ export const getWarmupSummary = cache(
       warming: 0,
       todaySent: 0,
       todayTarget: 0,
+      earliestDay: null,
+      readyAfterDays: 14,
     };
     for (const item of mailboxes) {
       const mailbox = item as Record<string, unknown>;
@@ -36,7 +40,18 @@ export const getWarmupSummary = cache(
         continue;
       }
       summary.active += 1;
-      summary.warming += mailbox.status === "warming" ? 1 : 0;
+      if (mailbox.status === "warming") {
+        summary.warming += 1;
+        const day = count(mailbox.day);
+        if (day > 0) {
+          summary.earliestDay =
+            summary.earliestDay === null
+              ? day
+              : Math.min(summary.earliestDay, day);
+        }
+        summary.readyAfterDays =
+          count(mailbox.readyAfterDays) || summary.readyAfterDays;
+      }
       summary.todaySent += count(mailbox.todaySent);
       summary.todayTarget += count(mailbox.todayTarget);
     }

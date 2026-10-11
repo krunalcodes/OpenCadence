@@ -1,24 +1,13 @@
 "use client";
 
 import {
-  Combobox,
-  ComboboxChip,
-  ComboboxChips,
-  ComboboxChipsInput,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxValue,
-  useComboboxAnchor,
-} from "@workspace/ui/components/combobox";
-import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
 } from "@workspace/ui/components/field";
-import type { Option } from "@/features/imports/lib/imports";
+import type { Option } from "@/components/product/option";
+import { OptionMultiSelect } from "@/components/product/option-multi-select";
 
 type MultiComboboxProps = {
   id: string;
@@ -49,7 +38,6 @@ export function MultiCombobox({
   disabled,
   onChange,
 }: MultiComboboxProps) {
-  const anchor = useComboboxAnchor();
   const describedBy = error ? `${id}-error` : `${id}-hint`;
 
   return (
@@ -61,54 +49,18 @@ export function MultiCombobox({
       {options.length === 0 ? (
         <p className="text-[13px] text-ink-tertiary">{noOptions}</p>
       ) : (
-        <Combobox
-          multiple
-          items={options}
+        <OptionMultiSelect
+          id={id}
+          options={options}
           value={value}
+          label={label}
+          placeholder={placeholder}
+          empty={emptyText}
           disabled={disabled}
-          onValueChange={(next: Option[]) => onChange(next)}
-        >
-          <ComboboxChips
-            ref={anchor}
-            className="bg-card text-[13px] shadow-xs focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background"
-          >
-            <ComboboxValue>
-              {(selected: Option[]) => (
-                <>
-                  {selected.map((item) => (
-                    <ComboboxChip
-                      key={item.value}
-                      className="rounded-[6px] bg-border-subtle"
-                    >
-                      {item.label}
-                    </ComboboxChip>
-                  ))}
-                  <ComboboxChipsInput
-                    id={id}
-                    placeholder={selected.length === 0 ? placeholder : ""}
-                    aria-invalid={error ? true : undefined}
-                    aria-describedby={describedBy}
-                    className="text-[13px]"
-                  />
-                </>
-              )}
-            </ComboboxValue>
-          </ComboboxChips>
-          <ComboboxContent anchor={anchor}>
-            <ComboboxEmpty>{emptyText}</ComboboxEmpty>
-            <ComboboxList>
-              {(item: Option) => (
-                <ComboboxItem
-                  key={item.value}
-                  value={item}
-                  className="text-[13px]"
-                >
-                  {item.label}
-                </ComboboxItem>
-              )}
-            </ComboboxList>
-          </ComboboxContent>
-        </Combobox>
+          invalid={Boolean(error)}
+          describedBy={describedBy}
+          onChange={onChange}
+        />
       )}
       {error ? (
         <FieldError id={`${id}-error`} className="text-[13px] text-danger">

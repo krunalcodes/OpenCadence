@@ -1,3 +1,4 @@
+import type { Option } from "@/components/product/option";
 import { isRow, type Row, rowsOf, textOrNull, textsOf } from "@/lib/api";
 
 export type CustomValue = string | number | boolean | null;
@@ -68,7 +69,7 @@ export type ContactField = {
   position: number;
 };
 
-export type Option = { value: string; label: string };
+export type { Option } from "@/components/product/option";
 
 export type ContactsPage = { contacts: Contact[]; nextCursor: string | null };
 
@@ -291,9 +292,7 @@ export function toCount(value: unknown, key: "count" | "affected") {
   return typeof count === "number" && Number.isFinite(count) ? count : null;
 }
 
-export function sameOption(a: Option, b: Option) {
-  return a.value === b.value;
-}
+export { sameOption } from "@/components/product/option";
 
 export function hasFilters(filters: ContactFilters) {
   return (

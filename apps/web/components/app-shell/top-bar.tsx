@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@workspace/ui/components/button";
 import { Kbd } from "@workspace/ui/components/kbd";
 import {
   Tooltip,
@@ -8,10 +7,11 @@ import {
   TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import { Menu, PanelLeft, Plus, Upload } from "lucide-react";
+import { Menu, PanelLeft, Upload } from "lucide-react";
+import Link from "next/link";
 import { buttonFocusRing, focusRing } from "@/components/app-shell/page-header";
-import { notBuilt } from "@/components/app-shell/rail";
 import { WorkspaceSwitcher } from "@/components/app-shell/workspace-switcher";
+import { appHref } from "@/lib/navigation";
 import type { Workspace } from "@/lib/session";
 
 const iconButton =
@@ -109,25 +109,17 @@ export function TopBar({
         </span>
       </p>
 
-      <Button
-        variant="outline"
+      <Link
+        href={appHref("contacts/import")}
         aria-label="Import contacts"
-        onClick={() => notBuilt("Import contacts")}
         className={cn(
-          "bg-card px-2 text-[13px] shadow-xs hover:bg-muted sm:px-3",
+          "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2 font-medium text-[13px] text-foreground shadow-xs transition-colors hover:bg-muted sm:px-3 [&_svg]:size-4",
           buttonFocusRing,
         )}
       >
         <Upload strokeWidth={1.6} aria-hidden />
         <span className="hidden sm:inline">Import contacts</span>
-      </Button>
-      <Button
-        onClick={() => notBuilt("New campaign")}
-        className={cn("px-3 text-[13px] hover:bg-brand-hover", buttonFocusRing)}
-      >
-        <Plus strokeWidth={1.6} aria-hidden />
-        New campaign
-      </Button>
+      </Link>
     </header>
   );
 }

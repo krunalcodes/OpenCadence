@@ -16,6 +16,7 @@ import {
 } from "@workspace/ui/components/field";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
+import { OptionMultiSelect } from "@/components/product/option-multi-select";
 import {
   dangerButtonClass,
   dialogActionsClass,
@@ -25,7 +26,6 @@ import {
   secondaryButtonClass,
 } from "@/components/product/styles";
 import { Spinner } from "@/components/spinner";
-import { OptionMultiSelect } from "@/features/contacts/components/option-multi-select";
 import type { BulkAction, Option } from "@/features/contacts/lib/contacts";
 import {
   type BulkPickAction,

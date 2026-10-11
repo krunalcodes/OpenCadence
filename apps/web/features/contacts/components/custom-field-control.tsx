@@ -4,8 +4,8 @@ import { Field, FieldError, FieldLabel } from "@workspace/ui/components/field";
 import { Input } from "@workspace/ui/components/input";
 import { Switch } from "@workspace/ui/components/switch";
 import { cn } from "@workspace/ui/lib/utils";
+import { OptionCombobox } from "@/components/product/option-combobox";
 import { inputClass } from "@/components/product/styles";
-import { OptionCombobox } from "@/features/contacts/components/option-combobox";
 import {
   type ContactField,
   maxCustomTextLength,

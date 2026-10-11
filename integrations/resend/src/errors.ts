@@ -73,6 +73,9 @@ function codeFor({ status, name, message }: ResendErrorResponse) {
     }
     return name && lockedNames.includes(name) ? "temporary" : "unknown";
   }
+  if (status === 400 && /api key is invalid/i.test(message ?? "")) {
+    return "invalid_credentials";
+  }
   if ([400, 404, 405, 422].includes(status)) {
     return "validation";
   }

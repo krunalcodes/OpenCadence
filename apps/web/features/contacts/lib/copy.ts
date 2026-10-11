@@ -235,7 +235,8 @@ export const copy = {
     tags: "Tags",
     tagsHint: "Type a new name and press Enter to create a tag.",
     suppressionLink: "View suppression list",
-    added: (date: string, origin: string) => `Added ${date} ${origin}`,
+    added: (date: string, origin: string) =>
+      `Added ${date.charAt(0).toLowerCase()}${date.slice(1)} ${origin}`,
     cancel: "Cancel",
     save: "Save changes",
     create: "Add contact",

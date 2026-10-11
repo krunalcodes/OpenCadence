@@ -81,7 +81,21 @@ type AreaPanelProps = {
   activePath: string;
   onCollapse: () => void;
   onSearch: () => void;
+  warmup?: PanelWarmup | null;
 };
+
+export type PanelWarmup = {
+  warming: number;
+  earliestDay: number | null;
+  readyAfterDays: number;
+};
+
+function warmupLine(warmup: PanelWarmup) {
+  const day = `day ${warmup.earliestDay} of ${warmup.readyAfterDays}`;
+  return warmup.warming === 1
+    ? `1 mailbox, ${day}`
+    : `${warmup.warming} mailboxes, earliest on ${day}`;
+}
 
 export function AreaPanel({
   workspace,
@@ -93,6 +107,7 @@ export function AreaPanel({
   activePath,
   onCollapse,
   onSearch,
+  warmup,
 }: AreaPanelProps) {
   return (
     <aside
@@ -193,18 +208,26 @@ export function AreaPanel({
         </section>
       ) : null}
 
-      <div className="mt-auto rounded-[10px] border border-border bg-card p-[11px] shadow-xs">
-        <p className="font-semibold text-foreground">Warm-up in progress</p>
-        <p className="mt-0.5 mb-2 text-muted-foreground text-xs tabular-nums">
-          4 mailboxes, day 12 of 21
-        </p>
-        <Progress
-          value={12}
-          max={21}
-          aria-label="Warm-up progress, day 12 of 21"
-          className="**:data-[slot=progress-track]:h-[5px] **:data-[slot=progress-track]:bg-border-subtle"
-        />
-      </div>
+      {warmup && warmup.warming > 0 && warmup.earliestDay !== null ? (
+        <Link
+          href={appHref("warmup")}
+          className={cn(
+            "mt-auto block rounded-[10px] border border-border bg-card p-[11px] shadow-xs transition-colors hover:bg-muted",
+            focusRing,
+          )}
+        >
+          <p className="font-semibold text-foreground">Warm-up in progress</p>
+          <p className="mt-0.5 mb-2 text-muted-foreground text-xs tabular-nums">
+            {warmupLine(warmup)}
+          </p>
+          <Progress
+            value={Math.min(warmup.earliestDay, warmup.readyAfterDays)}
+            max={warmup.readyAfterDays}
+            aria-label={`Warm-up progress, day ${warmup.earliestDay} of ${warmup.readyAfterDays}`}
+            className="**:data-[slot=progress-track]:h-[5px] **:data-[slot=progress-track]:bg-border-subtle"
+          />
+        </Link>
+      ) : null}
     </aside>
   );
 }

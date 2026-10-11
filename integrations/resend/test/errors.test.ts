@@ -12,6 +12,7 @@ const message = {
 const rows: [number, string | undefined, string, string][] = [
   [401, "missing_api_key", "Missing API key", "invalid_credentials"],
   [403, "invalid_api_key", "API key is invalid", "invalid_credentials"],
+  [400, "validation_error", "API key is invalid", "invalid_credentials"],
   [401, "unheard_of", "Nope", "invalid_credentials"],
   [403, "unheard_of", "Nope", "invalid_credentials"],
   [403, "validation_error", "Something else", "validation"],

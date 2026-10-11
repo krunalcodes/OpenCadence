@@ -14,8 +14,8 @@ import {
 } from "@workspace/ui/components/combobox";
 import { Plus } from "lucide-react";
 import { useState } from "react";
+import { type Option, sameOption } from "@/components/product/option";
 import { Spinner } from "@/components/spinner";
-import { type Option, sameOption } from "@/features/contacts/lib/contacts";
 
 const createPrefix = "create:";
 

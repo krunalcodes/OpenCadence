@@ -273,9 +273,9 @@ export function describeSourceError(
   error: Failure,
   fallback = copy.errors.fallback,
 ) {
-  return source.integrationType === "imap-smtp"
-    ? describeMailboxError(error, fallback)
-    : describeError(error, fallback);
+  return source.integrationType === "gmail"
+    ? describeError(error, fallback)
+    : describeMailboxError(error, fallback);
 }
 
 export function describeConnectError(code: string) {

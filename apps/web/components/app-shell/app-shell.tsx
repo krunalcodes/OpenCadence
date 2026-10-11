@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { AreaPanel } from "@/components/app-shell/area-panel";
+import { AreaPanel, type PanelWarmup } from "@/components/app-shell/area-panel";
 import { CommandPalette } from "@/components/app-shell/command-palette";
 import { CreateWorkspaceDialog } from "@/components/app-shell/create-workspace-dialog";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
@@ -45,6 +45,7 @@ type AppShellProps = {
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   viewCounts?: ViewCounts;
+  warmup?: PanelWarmup | null;
   children: React.ReactNode;
 };
 
@@ -54,6 +55,7 @@ export function AppShell({
   workspaces,
   activeWorkspaceId,
   viewCounts,
+  warmup,
   children,
 }: AppShellProps) {
   const pathname = usePathname();
@@ -196,6 +198,7 @@ export function AppShell({
           activePath={page.path}
           onCollapse={() => setPanel(true)}
           onSearch={() => setPaletteOpen(true)}
+          warmup={warmup}
         />
       )}
 
