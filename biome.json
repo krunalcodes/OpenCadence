@@ -11,7 +11,8 @@
       "!**/next-env.d.ts",
       "!**/public",
       "!.agents",
-      "!.claude"
+      "!.claude",
+      "!**/.impeccable"
     ]
   },
   "formatter": {
@@ -49,6 +50,23 @@
           }
         }
       }
+    },
+    {
+      "includes": ["packages/ui/src/components/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "noLabelWithoutControl": "off",
+            "useKeyWithClickEvents": "off"
+          }
+        }
+      }
     }
-  ]
+  ],
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
 }

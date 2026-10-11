@@ -173,7 +173,7 @@ This is a [Turborepo](https://turborepo.dev) monorepo using Bun workspaces.
 
 - `apps/web`: the [Next.js](https://nextjs.org) application
 - `apps/api`: the [NestJS](https://nestjs.com) API
-- `packages/ui`: shared React components
+- `packages/ui`: shared shadcn/ui components on Base UI (`@workspace/ui`)
 - `packages/typescript-config`: shared `tsconfig.json` presets
 
 ## Contributing

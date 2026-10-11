@@ -27,6 +27,21 @@ is planned; do not describe planned features as shipped.
 - **Built for translation.** The interface ships in multiple languages. Never
   hard-code user-facing strings; route them through the i18n layer.
 
+## Design
+
+Read `PRODUCT.md` (who the product is for and what it must respect) and
+`DESIGN.md` (colours, type, layout, components) before any UI work, and use
+the `impeccable` skill for it.
+
+- UI is built from shadcn/ui components on Base UI, in `packages/ui`
+  (`@workspace/ui`). Add components by running the shadcn CLI from `apps/web`.
+- Restyle to the `DESIGN.md` tokens. Never ship the default shadcn look.
+- Follow the control rules in `DESIGN.md` under "Choosing the right control",
+  for example a searchable combobox in place of a plain select.
+- Inter is the only typeface.
+- The design is approved from a mock only. Do not build screens from it
+  until asked.
+
 ## Tech stack
 
 Decided. Use these; do not introduce alternatives without asking.
@@ -38,7 +53,9 @@ Decided. Use these; do not introduce alternatives without asking.
 | Object storage | S3-compatible (MinIO in local development) |
 | Queues and background jobs | BullMQ on Redis (sends, sequence steps, warm-up, webhooks) |
 | Web app | Next.js with React (`apps/web`) |
-| Styling | Tailwind CSS |
+| Styling | Tailwind CSS v4 |
+| Components | shadcn/ui on Base UI primitives (`@workspace/ui`) |
+| Typeface | Inter variable, self-hosted |
 | Data fetching and server state | TanStack Query |
 | Data tables | TanStack Table (React Table) |
 | AI features | Vercel AI SDK |
@@ -57,7 +74,7 @@ Turborepo monorepo on Bun workspaces (Bun 1.3+, Node 24+).
 - `apps/api`: NestJS API on Fastify (port 3001), compiled with SWC. Routes are
   URI-versioned (`/v1/...`). Root module lives in `src/app/`; tests run on
   Vitest
-- `packages/ui`: shared React components
+- `packages/ui`: shared shadcn/ui components on Base UI (`@workspace/ui`)
 - `packages/typescript-config`: shared tsconfig presets
 - `.agents/skills`: project agent skills (symlinked into `.claude/skills`)
 
