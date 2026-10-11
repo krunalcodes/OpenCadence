@@ -1,156 +1,116 @@
-# Turborepo starter
+# OpenCadence
 
-This Turborepo starter is maintained by the Turborepo core team.
+Open-source, self-hostable email marketing and outreach. Build newsletters, run
+automated sequences, warm up inboxes, and send through the email provider you
+already pay for.
 
-## Using this example
+Think listmonk or Mailchimp for newsletters and Smartlead for sequences and
+warm-up, in one MIT-licensed app you run yourself.
 
-Run the following command:
+> **Status: early development.** The repository is a fresh scaffold. Nothing
+> below is usable yet; the feature list describes what is being built, not what
+> ships today. Star or watch the repo to follow along.
 
-```sh
-npx create-turbo@latest
-```
+## Why
 
-## What's inside?
+Email tools tend to bundle three things: the software, the sending
+infrastructure, and a per-contact price. OpenCadence only wants to be the
+software.
 
-This Turborepo includes the following packages/apps:
+- **Bring your own provider.** Connect Amazon SES, Resend, or any SMTP server.
+  You keep your sending reputation, your provider pricing, and the option to
+  switch.
+- **Own your data.** Contacts, content, and engagement history live in your
+  database, on your infrastructure.
+- **One tool for both jobs.** Opt-in newsletters and one-to-one sequences
+  share contacts, suppression lists, and analytics instead of living in two
+  products.
 
-### Apps and Packages
+## Planned features
 
-- `web`: a [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library used by the `web` application
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+### Newsletters and campaigns
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+- Email builder with reusable templates and a plain HTML/Markdown escape hatch
+- Lists, tags, and segments
+- Subscription forms, double opt-in, and a preference centre
+- Scheduling, send-time throttling, and A/B tests
+- Open, click, bounce, complaint, and unsubscribe tracking
 
-### Utilities
+### Sequences
 
-This Turborepo has some additional tools already setup for you:
+- Multi-step sequences with delays, conditions, and branching
+- Stop on reply, per-mailbox sending limits, and sending windows
+- Mailbox rotation across connected inboxes
+- Unified inbox for replies
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [Biome](https://biomejs.dev/) for linting, formatting and import sorting
+### Deliverability
 
-### Build
+- Inbox warm-up with gradual volume ramp
+- SPF, DKIM, and DMARC checks for sending domains
+- Bounce and complaint handling, with automatic suppression
+- Per-provider and per-domain rate limits
 
-To build all apps and packages, run the following command:
+### Providers
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+- Amazon SES
+- Resend
+- Generic SMTP
+- A small adapter interface so new providers are a single package
 
-```sh
-cd my-turborepo
-turbo build
-```
+### Platform
 
-Without global `turbo`, use your package manager:
+- Self-host with Docker
+- Workspaces, team members, and roles
+- REST API and webhooks
+- Import from CSV and from other tools
 
-```sh
-cd my-turborepo
-npx turbo build
-bun exec turbo build
-bun exec turbo build
-```
+## Self-hosted and hosted
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+The self-hosted version is the product, and stays MIT-licensed with every
+feature included. A hosted version run by the maintainers may follow for teams
+that would rather not operate it themselves. It will run the same code.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+## Responsible sending
 
-```sh
-turbo build --filter=web
-```
+OpenCadence is a sending tool, and you are responsible for how you use it.
+Follow the laws that apply to you (CAN-SPAM, GDPR, CASL, and others) and your
+email provider's acceptable use policy. Unsubscribe handling and suppression
+lists are built in and cannot be turned off.
 
-Without global `turbo`:
+## Development
 
-```sh
-npx turbo build --filter=web
-bun exec turbo build --filter=web
-bun exec turbo build --filter=web
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-bun exec turbo dev
-bun exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+Requirements: [Bun](https://bun.sh) 1.3+ and Node.js 24+.
 
 ```sh
-turbo dev --filter=web
+bun install
+bun run dev
 ```
 
-Without global `turbo`:
+The web app runs at http://localhost:3000.
 
-```sh
-npx turbo dev --filter=web
-bun exec turbo dev --filter=web
-bun exec turbo dev --filter=web
-```
+| Command               | What it does                               |
+| --------------------- | ------------------------------------------ |
+| `bun run dev`         | Start every app in development mode        |
+| `bun run build`       | Build every app and package                |
+| `bun run lint`        | Lint and check formatting with Biome       |
+| `bun run format`      | Fix formatting, lint, and import order     |
+| `bun run check-types` | Type-check every app and package           |
 
-### Remote Caching
+### Repository layout
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+This is a [Turborepo](https://turborepo.dev) monorepo using Bun workspaces.
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+- `apps/web`: the [Next.js](https://nextjs.org) application
+- `packages/ui`: shared React components
+- `packages/typescript-config`: shared `tsconfig.json` presets
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+## Contributing
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
+opening a pull request, and the [Code of Conduct](CODE_OF_CONDUCT.md) before
+joining the discussion. To report a vulnerability, see
+[SECURITY.md](SECURITY.md).
 
-```sh
-cd my-turborepo
-turbo login
-```
+## License
 
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-bun exec turbo login
-bun exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-bun exec turbo link
-bun exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+[MIT](LICENSE)

@@ -1,6 +1,8 @@
 {
   "name": "OpenCadence",
   "private": true,
+  "description": "Open-source, self-hostable email marketing and outreach platform",
+  "license": "MIT",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
