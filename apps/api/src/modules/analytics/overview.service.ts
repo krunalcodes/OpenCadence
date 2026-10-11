@@ -16,6 +16,7 @@ import {
   DispatchService,
   type EngagementTotalsRow,
 } from "../dispatch/dispatch.service";
+import { DomainsService } from "../domains/domains.service";
 import {
   type SendingSourceDto,
   SendingSourcesService,
@@ -149,6 +150,7 @@ export class OverviewService {
     private readonly sources: SendingSourcesService,
     @Inject(ContactsService) private readonly contacts: ContactsService,
     @Inject(TemplatesService) private readonly templates: TemplatesService,
+    @Inject(DomainsService) private readonly domains: DomainsService,
     @Optional()
     @Inject(SequencesService)
     private readonly sequences?: SequencesService,
@@ -214,24 +216,32 @@ export class OverviewService {
   ): Promise<OverviewPayload> {
     const window = rangeWindow(range, now);
     const day = dayWindow(now, timezone);
-    const [{ sources }, campaigns, sequences, totalRows, hourly, hasMessages] =
-      await Promise.all([
-        this.sources.list(workspaceId),
-        this.campaigns.listActivity(workspaceId, campaignLimit),
-        this.sequences
-          ? this.sequences
-              .list(workspaceId, { status: "active", limit: sequenceLimit })
-              .then((page) => page.items)
-          : Promise.resolve<SequenceSummary[]>([]),
-        this.dispatch.engagementTotals(workspaceId, window),
-        this.dispatch.hourlyByKind(workspaceId, {
-          from: day.start,
-          to: day.end,
-          timezone,
-          kinds: ["sequence", "transactional"],
-        }),
-        this.dispatch.hasMessages(workspaceId),
-      ]);
+    const [
+      { sources },
+      campaigns,
+      sequences,
+      totalRows,
+      hourly,
+      hasMessages,
+      failingDomains,
+    ] = await Promise.all([
+      this.sources.list(workspaceId),
+      this.campaigns.listActivity(workspaceId, campaignLimit),
+      this.sequences
+        ? this.sequences
+            .list(workspaceId, { status: "active", limit: sequenceLimit })
+            .then((page) => page.items)
+        : Promise.resolve<SequenceSummary[]>([]),
+      this.dispatch.engagementTotals(workspaceId, window),
+      this.dispatch.hourlyByKind(workspaceId, {
+        from: day.start,
+        to: day.end,
+        timezone,
+        kinds: ["sequence", "transactional"],
+      }),
+      this.dispatch.hasMessages(workspaceId),
+      this.domains.failing(workspaceId),
+    ]);
 
     const current = totalsOf(totalRows, true);
     const previous = totalsOf(totalRows, false);
@@ -289,7 +299,12 @@ export class OverviewService {
         dailySendLimit: source.dailySendLimit,
         health: source.health,
       })),
-      alert: pickAlert({ sources, failedCampaigns, totals: current }),
+      alert: pickAlert({
+        failingDomains,
+        sources,
+        failedCampaigns,
+        totals: current,
+      }),
       summary: {
         running:
           campaigns.filter((campaign) => campaign.status === "sending").length +

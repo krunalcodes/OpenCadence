@@ -16,6 +16,7 @@ import {
   type ImapSmtpContext,
   requirePassword,
 } from "./config";
+import { fetchReceived } from "./content";
 import { messageGoneError } from "./errors";
 import {
   findAllMail,
@@ -377,5 +378,7 @@ export function createInbox(context: ImapSmtpContext): InboxSupport {
       ensureFolder(context, credentials, name),
     listReceived: (credentials, input) =>
       listReceived(context, credentials, input),
+    fetchReceived: (credentials, ref) =>
+      fetchReceived(context, credentials, ref),
   };
 }

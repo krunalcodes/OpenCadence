@@ -297,6 +297,7 @@ export const copy = {
     stepLabel: (position: number) => `Step ${position}`,
     showStep: "Show step",
     openSettings: "Open settings",
+    addFromEmail: "Add a from address",
     openBrand: "Open brand settings",
   },
   builder: {
@@ -532,6 +533,138 @@ export const copy = {
     retry: "Try again",
     loading: "Loading messages",
   },
+  ai: {
+    open: "Generate with AI",
+    title: "Generate a sequence with AI",
+    description:
+      "Describe the outreach and get a first draft of every email. You review and edit it before anything is created.",
+    setup: {
+      title: "AI is not set up for this workspace",
+      body: "Connect a model provider first. After that you can draft a whole sequence from a short brief, and nothing is created until you review it.",
+      link: "Open AI settings",
+      close: "Close",
+    },
+    brief: {
+      prompt: "What are you offering?",
+      promptPlaceholder:
+        "A scheduling tool for dental clinics that cuts no-shows by sending text reminders. Free for the first 30 days, set up in an afternoon.",
+      promptMissing: "Describe what you are offering first.",
+      promptCounter: (count: number, max: number) =>
+        `${countFormat.format(count)} / ${countFormat.format(max)}`,
+      audience: "Who are you writing to?",
+      audiencePlaceholder: "Practice managers at clinics with 3 to 10 dentists",
+      audienceHint:
+        "Optional. Role, kind of company, and what they care about.",
+      goal: "The one thing you want them to do",
+      goalPlaceholder: "Choose a goal",
+      goalEmpty: "No goal matches",
+      goals: {
+        reply: "Reply to the email",
+        call: "Book a call",
+        trial: "Start a trial",
+        link: "Open a link",
+        custom: "Something else",
+      },
+      customGoal: "Describe the goal",
+      customGoalPlaceholder: "Forward the email to whoever runs the front desk",
+      customGoalMissing: "Describe the goal, or choose one from the list.",
+      steps: "Number of emails",
+      stepsOption: (count: number) => `${count} emails`,
+      tone: "Tone",
+      tonePlaceholder: "Choose a tone",
+      toneEmpty: "No tone matches",
+      tones: {
+        friendly: "Friendly",
+        professional: "Professional",
+        direct: "Direct",
+        casual: "Casual",
+        custom: "Something else",
+      },
+      customTone: "Describe the tone",
+      customTonePlaceholder: "Dry, a little self-deprecating",
+      customToneMissing: "Describe the tone, or choose one from the list.",
+      generate: "Generate sequence",
+      viewDraft: "Back to the draft",
+      cancel: "Cancel",
+    },
+    result: {
+      name: "Sequence name",
+      namePlaceholder: "Dental clinics, reminders trial",
+      nameMissing: "Give the sequence a name.",
+      nameTooLong: (max: number) => `Use ${max} characters or fewer.`,
+      nameTaken:
+        "Another sequence already uses this name. Choose a different one.",
+      waitingForName: "Waiting for a name",
+      progress: (current: number, total: number) =>
+        `Writing email ${current} of ${total}`,
+      starting: "Starting the draft",
+      words: (count: number) => `${plural(count, "word", "words")} so far`,
+      stopped: "Stopped. The last email may be cut short, so check it.",
+      done: (count: number) => `${plural(count, "email", "emails")} drafted`,
+      stepsLabel: "Drafted emails",
+      emailNumber: (position: number) => `Email ${position}`,
+      subject: "Subject",
+      subjectPlaceholder: "A short, specific subject",
+      subjectMissing:
+        "The first email starts the thread, so it needs a subject.",
+      noSubject: "No subject yet",
+      replyNote: "Sent as a reply in the same thread",
+      wait: "Wait before sending",
+      body: "Email text",
+      bodyHint:
+        "Leave an empty line between paragraphs. Start lines with a dash for a list. Links stay attached to their words.",
+      bodyMissing: "This email is empty. Write something or remove it.",
+      writing: "Writing",
+      edit: "Edit",
+      editLabel: (position: number) => `Edit email ${position}`,
+      doneEditing: "Done",
+      remove: "Remove",
+      removeLabel: (position: number) => `Remove email ${position}`,
+      mergeNote:
+        "Merge tags such as {{first_name}} are shown as written. They are filled in for each contact when the email is sent.",
+      empty:
+        "The AI returned no emails. Try again, or go back and say more about the offer.",
+      noSteps: "Every email was removed. Regenerate, or go back to the brief.",
+      keptAfterError:
+        "The emails that arrived before the error are kept below. You can use them or regenerate.",
+      stop: "Stop",
+      back: "Back to brief",
+      regenerate: "Regenerate",
+      create: "Create sequence",
+      createFailed: "Could not create the sequence",
+      created: (name: string) => `Created ${name}`,
+      createdBody:
+        "The emails were saved as templates. Nothing is sent until you activate the sequence.",
+      stepRejected: (position: number) =>
+        `Email ${position} was not accepted. Check its text and try again.`,
+    },
+    discard: {
+      title: "Discard your edits?",
+      regenerateBody:
+        "Regenerating writes every email again and replaces the changes you made to this draft.",
+      closeBody:
+        "This draft has not been created yet. Closing discards it and the changes you made.",
+      cancel: "Keep editing",
+      regenerate: "Regenerate",
+      close: "Discard draft",
+    },
+    errors: {
+      notConfigured:
+        "AI is not set up for this workspace. Add a provider in AI settings, then try again.",
+      rateLimited:
+        "Too many AI requests in the last minute. Wait a moment, then try again.",
+      provider:
+        "The AI provider returned an error. Check the base URL, model and key in AI settings, or try again.",
+      validation:
+        "The brief was too long or incomplete. Shorten it and try again.",
+      forbidden: "You do not have permission to use this.",
+      network:
+        "The server did not answer. Check your connection and that the API is running.",
+      empty:
+        "The AI returned nothing usable. Try again, or go back and say more about the offer.",
+      fallback: "The AI request failed. Try again in a moment.",
+    },
+  },
   settings: {
     sending: {
       title: "Mailboxes",
@@ -548,6 +681,15 @@ export const copy = {
       fromNameHint:
         "Shown to the recipient. Leave empty to use each mailbox's own name.",
       fromNameTooLong: (max: number) => `Use ${max} characters or fewer.`,
+      fromEmail: "From address",
+      fromEmailPlaceholder: "you@yourdomain.com",
+      fromEmailHint:
+        "Used only by sources that have no fixed address of their own, such as an email provider account. Mailboxes always send from their own address.",
+      fromEmailInvalid: "Enter one email address, such as you@yourdomain.com.",
+      fromEmailNeeded: (names: string, count: number) =>
+        count === 1
+          ? `${names} has no address of its own, so this sequence needs a from address on a domain verified with that provider.`
+          : `${names} have no address of their own, so this sequence needs a from address on a domain verified with those providers.`,
       dailyLimit: "Daily limit per mailbox",
       dailyLimitPlaceholder: "No limit",
       dailyLimitHint:
@@ -611,7 +753,7 @@ const problemTexts: Record<string, string> = {
   source_needs_attention:
     "A chosen mailbox needs attention. Fix it in Integrations or remove it in Settings.",
   source_without_address:
-    "A chosen source has no fixed address, so it cannot send a sequence. Choose a mailbox.",
+    "A chosen source has no fixed sending address and this sequence has no from address. Add one in Settings.",
   source_without_inbox:
     "A chosen mailbox cannot read its inbox, so replies to it will not stop the sequence.",
   brand_without_address:
@@ -655,5 +797,31 @@ export function describeError(error: Failure) {
       return error.message ?? copy.errors.validation;
     default:
       return error.message ?? copy.errors.fallback;
+  }
+}
+
+export function describeAiError(error: Failure) {
+  const text = copy.ai.errors;
+  if (error.status === 0) {
+    return text.network;
+  }
+  if (error.status === 401) {
+    return copy.errors.signedOut;
+  }
+  switch (error.code) {
+    case "ai_not_configured":
+      return text.notConfigured;
+    case "ai_rate_limited":
+      return text.rateLimited;
+    case "ai_provider_error":
+      return error.message ?? text.provider;
+    case "validation":
+      return error.message ?? text.validation;
+    case "forbidden":
+      return text.forbidden;
+    case "empty":
+      return text.empty;
+    default:
+      return text.fallback;
   }
 }

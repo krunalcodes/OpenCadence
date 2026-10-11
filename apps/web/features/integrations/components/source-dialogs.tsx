@@ -34,7 +34,10 @@ import {
   describeError,
   maxSourceNameLength,
 } from "@/features/integrations/lib/copy";
-import type { SendingSource } from "@/features/integrations/lib/sources";
+import {
+  type SendingSource,
+  verifiedIdentities,
+} from "@/features/integrations/lib/sources";
 import {
   disconnectSource,
   sendTestEmail,
@@ -448,8 +451,9 @@ function validateAddress(value: string, missing: string) {
 }
 
 function TestEmailForm({ source, onClose, onChanged }: SourceFormProps) {
-  const needsFrom = source.integrationType === "resend";
+  const needsFrom = source.email === null;
   const text = copy.testEmailDialog;
+  const identities = verifiedIdentities(source);
   const [to, setTo] = useState("");
   const [from, setFrom] = useState("");
   const [errors, setErrors] = useState<TestEmailErrors>({});
@@ -550,7 +554,9 @@ function TestEmailForm({ source, onClose, onChanged }: SourceFormProps) {
             </FieldError>
           ) : (
             <FieldDescription id="test-email-from-hint" className="text-[13px]">
-              {text.fromHint}
+              {identities.length > 0
+                ? text.fromHintIdentities(identities.slice(0, 6).join(", "))
+                : text.fromHint}
             </FieldDescription>
           )}
         </Field>

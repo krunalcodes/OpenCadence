@@ -522,6 +522,7 @@ export function prepareEmail(input: PrepareEmailInput): PreparedEmail {
   const variables: Record<string, string> = { ...(input.variables ?? {}) };
   if (unsubscribeUrl !== null) {
     variables.unsubscribe_url = unsubscribeUrl;
+    variables.preferences_url = `${baseUrl}/t/p/${token}`;
   }
 
   const headers: Record<string, string> = { ...(input.headers ?? {}) };

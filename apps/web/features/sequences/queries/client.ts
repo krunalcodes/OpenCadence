@@ -1,3 +1,4 @@
+import type { FromDraftStep } from "@/features/sequences/lib/ai";
 import {
   type Enrollment,
   type EnrollmentAction,
@@ -75,6 +76,15 @@ export async function createSequence(name: string, timezone: string | null) {
     return toSequenceResult(zoned);
   }
   return toSequenceResult(await request("POST", "/sequences", { name }));
+}
+
+export async function createSequenceFromDraft(
+  name: string,
+  steps: FromDraftStep[],
+) {
+  return toSequenceResult(
+    await request("POST", "/sequences/from-draft", { name, steps }),
+  );
 }
 
 export async function updateSequence(

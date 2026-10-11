@@ -161,6 +161,7 @@ describe("inbox.listReceived", () => {
     expect(page).toEqual({
       messages: [
         {
+          ref: "1:7",
           messageId: "<reply-7@customer.example>",
           inReplyTo: root,
           references: [root],
@@ -408,6 +409,7 @@ describe("inbox.listReceived", () => {
     const [message] = (await list()).messages;
 
     expect(message).toEqual({
+      ref: "1:8",
       messageId: "<dsn-8@mx.customer.example>",
       references: [],
       from: { email: "MAILER-DAEMON@mx.customer.example" },

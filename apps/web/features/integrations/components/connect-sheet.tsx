@@ -49,6 +49,7 @@ import {
   type Integration,
   type IntegrationId,
   integrations,
+  type MailboxProvider,
   type Option,
   securityOptions,
   sesRegions,
@@ -57,13 +58,18 @@ import {
   copy,
   describeError,
   describeMailboxError,
+  describeProviderError,
 } from "@/features/integrations/lib/copy";
-import type { SendingSource } from "@/features/integrations/lib/sources";
+import type {
+  SendingSource,
+  ServerSetup,
+} from "@/features/integrations/lib/sources";
 import {
   type ApiError,
-  authorizeGmail,
+  authorizeMailbox,
   connectMailbox,
   connectResend,
+  connectSes,
 } from "@/features/integrations/queries/mutations";
 import { useOrigin } from "@/hooks/use-hydrated";
 
@@ -146,7 +152,7 @@ function securityOf(value: string | undefined) {
 type ConnectSheetProps = {
   open: boolean;
   integrationId: IntegrationId | null;
-  gmailConnectable: boolean;
+  setup: ServerSetup | null;
   onPick: (id: IntegrationId | null) => void;
   onOpenChange: (open: boolean) => void;
   onConnected: (source: SendingSource) => void;
@@ -155,13 +161,14 @@ type ConnectSheetProps = {
 export function ConnectSheet({
   open,
   integrationId,
-  gmailConnectable,
+  setup,
   onPick,
   onOpenChange,
   onConnected,
 }: ConnectSheetProps) {
   const [pending, setPending] = useState(false);
   const integration = integrationId ? findIntegration(integrationId) : null;
+  const provider = integration?.signIn?.provider ?? null;
 
   return (
     <Sheet
@@ -177,7 +184,10 @@ export function ConnectSheet({
           <ConnectForm
             key={integration.id}
             integration={integration}
-            blocked={integration.id === "gmail" && !gmailConnectable}
+            blocked={provider !== null && !setup?.connectable[provider]}
+            redirectUri={
+              provider ? (setup?.redirectUris[provider] ?? null) : null
+            }
             pending={pending}
             onPendingChange={setPending}
             onBack={() => onPick(null)}
@@ -250,6 +260,7 @@ export function ConnectSheet({
 type ConnectFormProps = {
   integration: Integration;
   blocked: boolean;
+  redirectUri: string | null;
   pending: boolean;
   onPendingChange: (pending: boolean) => void;
   onBack: () => void;
@@ -260,6 +271,7 @@ type ConnectFormProps = {
 function ConnectForm({
   integration,
   blocked,
+  redirectUri,
   pending,
   onPendingChange,
   onBack,
@@ -313,7 +325,9 @@ function ConnectForm({
     const message =
       integration.id === "imap-smtp"
         ? describeMailboxError(error)
-        : describeError(error);
+        : integration.id === "ses"
+          ? describeProviderError(error)
+          : describeError(error);
     const fieldId = fieldOfError(error, integration);
     if (fieldId) {
       const target = integration.fields.find((field) => field.id === fieldId);
@@ -341,9 +355,10 @@ function ConnectForm({
   }
 
   async function connect() {
-    if (integration.id === "gmail") {
+    if (integration.signIn) {
       const limit = (values.dailyLimit ?? "").trim();
-      const result = await authorizeGmail(
+      const result = await authorizeMailbox(
+        integration.signIn.provider,
         limit === "" ? {} : { dailySendLimit: Number(limit) },
       );
       if (result.ok) {
@@ -367,6 +382,23 @@ function ConnectForm({
         imapPort: Number(sent.imapPort),
         imapSecurity: securityOf(sent.imapSecurity),
         ...(limit === "" ? {} : { dailySendLimit: Number(limit) }),
+      });
+      onPendingChange(false);
+      if (result.ok) {
+        onConnected(result.data);
+        return;
+      }
+      showFailure(result.error);
+      return;
+    }
+    if (integration.id === "ses") {
+      const configurationSet = (values.configurationSet ?? "").trim();
+      const result = await connectSes({
+        name: (values.name ?? "").trim(),
+        accessKeyId: (values.accessKeyId ?? "").trim(),
+        secretAccessKey: (values.secretAccessKey ?? "").trim(),
+        region: values.region ?? "",
+        ...(configurationSet === "" ? {} : { configurationSet }),
       });
       onPendingChange(false);
       if (result.ok) {
@@ -473,7 +505,12 @@ function ConnectForm({
             </Fragment>
           ))}
         </div>
-        {blocked ? <GmailSetupNotice /> : null}
+        {blocked && integration.signIn ? (
+          <SetupNotice
+            provider={integration.signIn.provider}
+            redirectUri={redirectUri}
+          />
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-3 border-t border-border-subtle px-5 py-4">
@@ -502,8 +539,14 @@ function ConnectForm({
   );
 }
 
-function GmailSetupNotice() {
+type SetupNoticeProps = {
+  provider: MailboxProvider;
+  redirectUri: string | null;
+};
+
+function SetupNotice({ provider, redirectUri }: SetupNoticeProps) {
   const origin = useOrigin();
+  const text = copy.sheet.setup[provider];
   return (
     <div className="mt-4 flex gap-2 rounded-lg bg-info-surface px-3 py-2.5 leading-normal text-foreground">
       <Info
@@ -513,14 +556,11 @@ function GmailSetupNotice() {
       />
       <div className="min-w-0">
         <p>
-          <span className="font-medium text-info">
-            {copy.sheet.gmailSetupTitle}
-          </span>{" "}
-          {copy.sheet.gmailSetupBody}
+          <span className="font-medium text-info">{text.title}</span>{" "}
+          {text.body}
         </p>
         <p className="mt-1.5 font-mono text-[12.5px] break-all select-all">
-          {origin}
-          {copy.sheet.gmailCallbackPath}
+          {redirectUri ?? `${origin}${text.callbackPath}`}
         </p>
       </div>
     </div>

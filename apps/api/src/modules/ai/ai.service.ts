@@ -32,6 +32,7 @@ import {
   rewriteInstructions,
   rewritePrompt,
 } from "./prompts/rewrite";
+import { sequenceInstructions, sequencePrompt } from "./prompts/sequence";
 import type { PromptBrand } from "./prompts/shared";
 import { subjectsInstructions, subjectsPrompt } from "./prompts/subjects";
 
@@ -47,12 +48,20 @@ type Input = Record<string, unknown>;
 type Actor = { workspaceId: string; userId: string };
 
 const GENERATION_TIMEOUT_MS = 60_000;
+const SEQUENCE_TIMEOUT_MS = 120_000;
 const TEST_TIMEOUT_MS = 20_000;
 const MAX_PROMPT = 4_000;
 const MAX_HTML = 200_000;
 const MAX_REWRITE_TEXT = 8_000;
 const MAX_INSTRUCTION = 500;
 const MAX_TONE = 200;
+const MAX_AUDIENCE = 500;
+const MAX_GOAL = 300;
+const MAX_SEQUENCE_TONE = 100;
+const MIN_SEQUENCE_STEPS = 2;
+const MAX_SEQUENCE_STEPS = 6;
+const DEFAULT_SEQUENCE_STEPS = 4;
+const SEQUENCE_OUTPUT_TOKENS = 6_000;
 const MAX_SUBJECT = 998;
 const MAX_PREVIEW = 300;
 const MAX_MERGE_TAGS = 50;
@@ -285,6 +294,55 @@ export class AiService {
           signal,
         }),
         "<subject>",
+      ),
+      signal,
+    );
+  }
+
+  async sequence(workspaceId: string, input: Input, signal?: AbortSignal) {
+    const prompt = requiredText(input, "prompt", MAX_PROMPT);
+    const audience = optionalText(input, "audience", MAX_AUDIENCE);
+    const goal = optionalText(input, "goal", MAX_GOAL);
+    let steps = DEFAULT_SEQUENCE_STEPS;
+    if (input.steps !== undefined && input.steps !== null) {
+      if (
+        typeof input.steps !== "number" ||
+        !Number.isInteger(input.steps) ||
+        input.steps < MIN_SEQUENCE_STEPS ||
+        input.steps > MAX_SEQUENCE_STEPS
+      ) {
+        throw invalid(
+          "steps",
+          `steps must be a whole number from ${MIN_SEQUENCE_STEPS} to ${MAX_SEQUENCE_STEPS}.`,
+        );
+      }
+      steps = input.steps;
+    }
+    const tone = optionalText(input, "tone", MAX_SEQUENCE_TONE);
+    const mergeTags = this.mergeTags(input.mergeTags);
+
+    const settings = await this.ready(workspaceId);
+    const promptInput = {
+      brand: await this.promptBrand(workspaceId),
+      prompt,
+      audience,
+      goal,
+      steps,
+      tone,
+      mergeTags,
+    };
+    return this.stream(
+      startAt(
+        streamGeneration({
+          settings,
+          instructions: sequenceInstructions(promptInput),
+          prompt: sequencePrompt(promptInput),
+          maxOutputTokens: SEQUENCE_OUTPUT_TOKENS,
+          temperature: 0.7,
+          timeoutMs: SEQUENCE_TIMEOUT_MS,
+          signal,
+        }),
+        "<name>",
       ),
       signal,
     );

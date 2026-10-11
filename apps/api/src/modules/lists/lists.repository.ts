@@ -10,10 +10,29 @@ export type ListRow = {
   id: string;
   name: string;
   description: string | null;
+  isPublic: boolean;
+  publicName: string | null;
+  publicDescription: string | null;
   subscribedCount: number;
   unsubscribedCount: number;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type ListCatalogRow = {
+  id: string;
+  name: string;
+  isPublic: boolean;
+  publicName: string | null;
+  publicDescription: string | null;
+};
+
+export type ListValues = {
+  name: string;
+  description: string | null;
+  isPublic: boolean;
+  publicName: string | null;
+  publicDescription: string | null;
 };
 
 export type ListWriteResult =
@@ -63,6 +82,9 @@ export class ListsRepository {
         id: lists.id,
         name: lists.name,
         description: lists.description,
+        isPublic: lists.isPublic,
+        publicName: lists.publicName,
+        publicDescription: lists.publicDescription,
         subscribedCount: sql<number>`(count(*) filter (where ${listMembers.status} = 'subscribed'))::int`,
         unsubscribedCount: sql<number>`(count(*) filter (where ${listMembers.status} = 'unsubscribed'))::int`,
         createdAt: lists.createdAt,
@@ -95,6 +117,20 @@ export class ListsRepository {
     return row ?? null;
   }
 
+  catalog(workspaceId: string): Promise<ListCatalogRow[]> {
+    return this.db
+      .select({
+        id: lists.id,
+        name: lists.name,
+        isPublic: lists.isPublic,
+        publicName: lists.publicName,
+        publicDescription: lists.publicDescription,
+      })
+      .from(lists)
+      .where(eq(lists.workspaceId, workspaceId))
+      .orderBy(sql`lower(${lists.name})`, lists.id);
+  }
+
   async findExistingIds(workspaceId: string, ids: string[]) {
     const rows = await this.db
       .select({ id: lists.id })
@@ -105,7 +141,7 @@ export class ListsRepository {
 
   async insert(
     workspaceId: string,
-    values: { name: string; description: string | null },
+    values: Pick<ListValues, "name" | "description"> & Partial<ListValues>,
   ): Promise<ListWriteResult> {
     try {
       const [row] = await this.db
@@ -126,7 +162,7 @@ export class ListsRepository {
   async update(
     workspaceId: string,
     id: string,
-    values: { name?: string; description?: string | null },
+    values: Partial<ListValues>,
   ): Promise<ListWriteResult> {
     try {
       const [row] = await this.db

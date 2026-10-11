@@ -25,6 +25,9 @@ import { cn } from "@workspace/ui/lib/utils";
 import {
   Ellipsis,
   Gauge,
+  ListChecks,
+  MailSearch,
+  MailX,
   Pause,
   Pencil,
   Play,
@@ -39,7 +42,10 @@ import { SourceMark } from "@/components/product/source-mark";
 import { secondaryButtonClass } from "@/components/product/styles";
 import { Spinner } from "@/components/spinner";
 import { StatusBadge } from "@/components/status-badge";
-import { integrationMark } from "@/features/integrations/lib/catalog";
+import {
+  integrationMark,
+  mailboxProviderOf,
+} from "@/features/integrations/lib/catalog";
 import {
   copy,
   sourceSecondLine,
@@ -58,7 +64,7 @@ const headClass =
 const cellClass = "px-4 py-[11px] text-[13px]";
 const menuItemClass = "rounded-lg px-2 py-1.5 text-[13px]";
 
-export type RowAction = "test" | "pause" | "reconnect" | "default";
+export type RowAction = "test" | "pause" | "reconnect" | "default" | "replies";
 
 type SourceHandler = (source: SendingSource) => void;
 
@@ -73,6 +79,9 @@ type SourcesTableProps = {
   onToggleDefault: SourceHandler;
   onDisconnect: SourceHandler;
   onReconnect: SourceHandler;
+  onDetectReplies: SourceHandler;
+  onStopDetectingReplies: SourceHandler;
+  onSetup: SourceHandler;
 };
 
 export function SourcesTable({
@@ -86,6 +95,9 @@ export function SourcesTable({
   onToggleDefault,
   onDisconnect,
   onReconnect,
+  onDetectReplies,
+  onStopDetectingReplies,
+  onSetup,
 }: SourcesTableProps) {
   const { columns } = copy.connected;
 
@@ -107,7 +119,11 @@ export function SourcesTable({
           const rowBusy = busy?.id === source.id ? busy.action : null;
           const testing = rowBusy === "test";
           const reconnecting = rowBusy === "reconnect";
-          const menuBusy = rowBusy === "pause" || rowBusy === "default";
+          const menuBusy =
+            rowBusy === "pause" ||
+            rowBusy === "default" ||
+            rowBusy === "replies";
+          const mailbox = mailboxProviderOf(source.integrationType) !== null;
           const sent = countFormat.format(source.sentToday);
           const nearLimit = isNearLimit(source);
           const status = sourceStatusView(source);
@@ -256,7 +272,7 @@ export function SourcesTable({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="end"
-                      className="w-48 p-1 text-[13px]"
+                      className="w-56 p-1 text-[13px]"
                     >
                       <DropdownMenuItem
                         className={menuItemClass}
@@ -273,6 +289,34 @@ export function SourcesTable({
                         <Send aria-hidden strokeWidth={1.6} />
                         {copy.connected.testEmail}
                       </DropdownMenuItem>
+                      {source.details.account ? (
+                        <DropdownMenuItem
+                          className={menuItemClass}
+                          onClick={() => onSetup(source)}
+                        >
+                          <ListChecks aria-hidden strokeWidth={1.6} />
+                          {copy.connected.setup}
+                        </DropdownMenuItem>
+                      ) : null}
+                      {mailbox && source.replyDetection === "on" ? (
+                        <DropdownMenuItem
+                          className={menuItemClass}
+                          disabled={rowBusy !== null}
+                          onClick={() => onStopDetectingReplies(source)}
+                        >
+                          <MailX aria-hidden strokeWidth={1.6} />
+                          {copy.connected.stopDetectingReplies}
+                        </DropdownMenuItem>
+                      ) : null}
+                      {mailbox && source.replyDetection !== "on" ? (
+                        <DropdownMenuItem
+                          className={menuItemClass}
+                          onClick={() => onDetectReplies(source)}
+                        >
+                          <MailSearch aria-hidden strokeWidth={1.6} />
+                          {copy.connected.detectReplies}
+                        </DropdownMenuItem>
+                      ) : null}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className={menuItemClass}

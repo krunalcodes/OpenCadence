@@ -2,9 +2,11 @@ import { HttpStatus, Inject, Injectable } from "@nestjs/common";
 import { apiError } from "../../common/api-error";
 import { isUuid } from "../../common/uuid";
 import {
+  type ListCatalogRow,
   type ListMemberStatus,
   type ListRow,
   ListsRepository,
+  type ListValues,
 } from "./lists.repository";
 
 export type { ListMemberStatus } from "./lists.repository";
@@ -13,10 +15,23 @@ export type List = {
   id: string;
   name: string;
   description: string | null;
+  isPublic: boolean;
+  publicName: string | null;
+  publicDescription: string | null;
   subscribedCount: number;
   unsubscribedCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ListCatalogEntry = ListCatalogRow;
+
+export type ListInput = {
+  name?: unknown;
+  description?: unknown;
+  isPublic?: unknown;
+  publicName?: unknown;
+  publicDescription?: unknown;
 };
 
 const maxNameLength = 80;
@@ -76,6 +91,61 @@ function parseDescription(value: unknown) {
   return description || null;
 }
 
+function parseIsPublic(value: unknown) {
+  if (typeof value !== "boolean") {
+    throw validation("isPublic must be true or false.", "isPublic");
+  }
+  return value;
+}
+
+function parsePublicName(value: unknown) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw validation("publicName must be text.", "publicName");
+  }
+  const name = value.replace(/\s+/g, " ").trim();
+  if (name.length > maxNameLength) {
+    throw validation(
+      `Keep the public name to ${maxNameLength} characters or fewer.`,
+      "publicName",
+    );
+  }
+  return name || null;
+}
+
+function parsePublicDescription(value: unknown) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw validation("publicDescription must be text.", "publicDescription");
+  }
+  const description = value.trim();
+  if (description.length > maxDescriptionLength) {
+    throw validation(
+      `Keep the public description to ${maxDescriptionLength} characters or fewer.`,
+      "publicDescription",
+    );
+  }
+  return description || null;
+}
+
+function parsePublicFields(input: ListInput) {
+  const values: Partial<ListValues> = {};
+  if (input.isPublic !== undefined) {
+    values.isPublic = parseIsPublic(input.isPublic);
+  }
+  if (input.publicName !== undefined) {
+    values.publicName = parsePublicName(input.publicName);
+  }
+  if (input.publicDescription !== undefined) {
+    values.publicDescription = parsePublicDescription(input.publicDescription);
+  }
+  return values;
+}
+
 function uniqueIds(values: string[], field: string, noun: string) {
   const unique = new Set<string>();
   for (const value of values) {
@@ -105,6 +175,9 @@ function toList(row: ListRow): List {
     id: row.id,
     name: row.name,
     description: row.description,
+    isPublic: row.isPublic,
+    publicName: row.publicName,
+    publicDescription: row.publicDescription,
     subscribedCount: row.subscribedCount,
     unsubscribedCount: row.unsubscribedCount,
     createdAt: row.createdAt.toISOString(),
@@ -133,13 +206,15 @@ export class ListsService {
     return toList(row);
   }
 
-  async create(
-    workspaceId: string,
-    input: { name?: unknown; description?: unknown },
-  ): Promise<List> {
+  catalog(workspaceId: string): Promise<ListCatalogEntry[]> {
+    return this.repository.catalog(workspaceId);
+  }
+
+  async create(workspaceId: string, input: ListInput): Promise<List> {
     const result = await this.repository.insert(workspaceId, {
       name: parseName(input.name),
       description: parseDescription(input.description),
+      ...parsePublicFields(input),
     });
     if (!result.ok) {
       throw result.reason === "name_taken" ? nameTaken() : notFound();
@@ -150,9 +225,9 @@ export class ListsService {
   async update(
     workspaceId: string,
     id: string,
-    input: { name?: unknown; description?: unknown },
+    input: ListInput,
   ): Promise<List> {
-    const values: { name?: string; description?: string | null } = {};
+    const values: Partial<ListValues> = parsePublicFields(input);
     if (input.name !== undefined) {
       values.name = parseName(input.name);
     }

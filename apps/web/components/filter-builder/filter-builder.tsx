@@ -53,6 +53,7 @@ import type {
   FilterMatch,
   FilterOption,
 } from "@/components/filter-builder/types";
+import { DatePicker } from "@/components/pickers/date-picker";
 import {
   inputClass,
   secondaryButtonClass,
@@ -337,14 +338,17 @@ function ConditionRow({
       );
     } else if (kind === "date") {
       value = (
-        <Input
-          type="date"
-          aria-label={copy.dateLabel(row)}
-          value={typeof current === "string" ? current.slice(0, 10) : ""}
-          onChange={(event) =>
-            onChange({ ...condition, value: event.target.value })
+        <DatePicker
+          label={copy.dateLabel(row)}
+          value={
+            typeof current === "string" && current !== ""
+              ? current.slice(0, 10)
+              : null
           }
-          className={cn(textInputClass, "tabular-nums")}
+          clearable
+          captionLayout="dropdown"
+          className="w-full"
+          onChange={(next) => onChange({ ...condition, value: next ?? "" })}
         />
       );
     } else if (kind === "option") {
@@ -414,14 +418,13 @@ function ConditionRow({
     );
   } else if (condition.op === "before" || condition.op === "after") {
     value = (
-      <Input
-        type="date"
-        aria-label={copy.dateLabel(row)}
-        value={condition.value.slice(0, 10)}
-        onChange={(event) =>
-          onChange({ ...condition, value: event.target.value })
-        }
-        className={cn(textInputClass, "tabular-nums")}
+      <DatePicker
+        label={copy.dateLabel(row)}
+        value={condition.value === "" ? null : condition.value.slice(0, 10)}
+        clearable
+        captionLayout="dropdown"
+        className="w-full"
+        onChange={(next) => onChange({ ...condition, value: next ?? "" })}
       />
     );
   } else if (kind === "text" && isTextCondition(condition)) {

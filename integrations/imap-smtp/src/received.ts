@@ -15,6 +15,7 @@ import {
   type ImapSmtpContext,
   requirePassword,
 } from "./config";
+import { receivedRef } from "./content";
 import {
   decodeTransfer,
   type HeaderFields,
@@ -229,6 +230,7 @@ function toReceived(
   message: ImapFetchedMessage,
   fields: HeaderFields,
   deliveryStatus: DeliveryStatus | undefined,
+  uidValidity: string,
 ): ReceivedMessage {
   const messageId = normalizeMessageId(message.envelope?.messageId);
   const inReplyTo = normalizeMessageId(
@@ -237,6 +239,7 @@ function toReceived(
   );
   const from = message.envelope?.from?.find((entry) => entry.address)?.address;
   return {
+    ref: receivedRef(uidValidity, message.uid),
     ...(messageId ? { messageId } : {}),
     ...(inReplyTo ? { inReplyTo } : {}),
     references: (fields.get("references") ?? [])
@@ -315,7 +318,7 @@ export async function listReceived(
       )
         ? await readDeliveryStatus(session, message)
         : undefined;
-      messages.push(toReceived(message, fields, deliveryStatus));
+      messages.push(toReceived(message, fields, deliveryStatus, uidValidity));
     }
 
     return {

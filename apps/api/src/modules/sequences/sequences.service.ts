@@ -21,6 +21,7 @@ import {
 } from "../templates/templates.service";
 import {
   maxNameLength,
+  parseDraft,
   parseName,
   parseSettings,
   parseSteps,
@@ -92,6 +93,7 @@ export type Sequence = SequenceSummary & {
   steps: StepDto[];
   sources: SequenceSourceDto[];
   fromName: string | null;
+  fromEmail: string | null;
   trackOpens: boolean;
   trackClicks: boolean;
   stopOnReply: boolean;
@@ -124,12 +126,15 @@ const defaultLimit = 30;
 const maxLimit = 100;
 const maxSearchLength = 200;
 const duplicateAttempts = 5;
+const templateNameAttempts = 20;
+const maxTemplateNameLength = 120;
 const builtInTags = new Set([
   ...contactMergeKeys,
   "brand.name",
   "brand.address",
   "brand.website",
   "unsubscribe_url",
+  "preferences_url",
 ]);
 
 function notFound() {
@@ -155,6 +160,23 @@ function archived() {
     "not_editable",
     "This sequence is archived. Activate it again to change it.",
   );
+}
+
+function codeOf(error: unknown) {
+  if (!(error instanceof HttpException)) {
+    return null;
+  }
+  const response = error.getResponse();
+  const code =
+    typeof response === "object" && response !== null
+      ? (response as { code?: unknown }).code
+      : undefined;
+  return typeof code === "string" ? code : null;
+}
+
+function stepTemplateName(sequenceName: string, step: number, attempt: number) {
+  const suffix = `: step ${step}${attempt === 0 ? "" : ` (${attempt + 1})`}`;
+  return `${sequenceName.slice(0, maxTemplateNameLength - suffix.length).trimEnd()}${suffix}`;
 }
 
 function userOf(context: WorkspaceAuthContext) {
@@ -275,6 +297,53 @@ export class SequencesService {
     return this.view(context.workspaceId, result.row);
   }
 
+  async createFromDraft(context: WorkspaceAuthContext, input: unknown) {
+    const { workspaceId } = context;
+    const draft = parseDraft(input);
+    const taken = await this.repository.namesStartingWith(
+      workspaceId,
+      draft.name,
+    );
+    if (taken.some((name) => name.toLowerCase() === draft.name.toLowerCase())) {
+      throw nameTaken();
+    }
+    const templateIds: string[] = [];
+    let created: SequenceRow;
+    try {
+      const steps: StepValues[] = [];
+      for (const [index, step] of draft.steps.entries()) {
+        const template = await this.createStepTemplate(
+          context,
+          draft.name,
+          index + 1,
+          step,
+        );
+        templateIds.push(template.id);
+        steps.push({
+          delayMinutes: step.delayMinutes,
+          templateId: template.id,
+          subject: step.subject,
+          threadMode: step.threadMode,
+          snapshotId: await this.snapshot(workspaceId, template, step.subject),
+        });
+      }
+      const result = await this.repository.insertSequence(
+        workspaceId,
+        { name: draft.name },
+        userOf(context),
+        steps,
+      );
+      if (!result.ok) {
+        throw nameTaken();
+      }
+      created = result.row;
+    } catch (error) {
+      await this.removeTemplates(workspaceId, templateIds);
+      throw error;
+    }
+    return this.view(workspaceId, created);
+  }
+
   async update(workspaceId: string, id: string, input: unknown) {
     const current = await this.require(workspaceId, id);
     if (current.status === "archived") {
@@ -341,6 +410,7 @@ export class SequencesService {
           ),
           sourceIds: source.sourceIds,
           fromName: source.fromName,
+          fromEmail: source.fromEmail,
           trackOpens: source.trackOpens,
           trackClicks: source.trackClicks,
           stopOnReply: source.stopOnReply,
@@ -551,6 +621,40 @@ export class SequencesService {
     }
   }
 
+  private async createStepTemplate(
+    context: WorkspaceAuthContext,
+    sequenceName: string,
+    step: number,
+    content: { subject: string; html: string; text: string },
+  ) {
+    for (let attempt = 0; attempt < templateNameAttempts; attempt += 1) {
+      try {
+        return await this.templates.create(context, {
+          name: stepTemplateName(sequenceName, step, attempt),
+          subject: content.subject,
+          html: content.html,
+          text: content.text,
+        });
+      } catch (error) {
+        if (codeOf(error) !== "name_taken") {
+          throw error;
+        }
+      }
+    }
+    throw apiError(
+      HttpStatus.CONFLICT,
+      "template_name_taken",
+      "Templates named after this sequence already exist. Choose another sequence name.",
+      "name",
+    );
+  }
+
+  private async removeTemplates(workspaceId: string, ids: string[]) {
+    for (const id of ids) {
+      await this.templates.remove(workspaceId, id).catch(() => undefined);
+    }
+  }
+
   private async loadTemplates(workspaceId: string, ids: (string | null)[]) {
     const templates = new Map<string, Template>();
     for (const id of new Set(ids)) {
@@ -642,9 +746,10 @@ export class SequencesService {
         email: source.email,
         integrationType: source.integrationType,
         status: source.status,
-        hasInbox: this.sources.canDetectReplies(source.integrationType),
+        hasInbox: this.sources.canDetectReplies(source),
       })),
       fromName: row.fromName,
+      fromEmail: row.fromEmail,
       trackOpens: row.trackOpens,
       trackClicks: row.trackClicks,
       stopOnReply: row.stopOnReply,
@@ -764,15 +869,15 @@ export class SequencesService {
             ? `Sending through ${source.name} is paused. Resume it or remove it from this sequence.`
             : `${source.name} needs attention before it can send. Fix it on the Integrations page.`,
         );
-      } else if (!source.email) {
+      } else if (!source.email && !sequence.fromEmail) {
         error(
           "sources",
           "source_without_address",
-          `${source.name} has no fixed address, so it cannot send a sequence. Choose a mailbox.`,
+          `${source.name} has no fixed address. Set a from address in the sequence settings, on a domain verified for ${source.name}.`,
         );
       } else if (
         sequence.stopOnReply &&
-        !this.sources.canDetectReplies(source.integrationType)
+        !this.sources.canDetectReplies(source)
       ) {
         warning(
           "sources",

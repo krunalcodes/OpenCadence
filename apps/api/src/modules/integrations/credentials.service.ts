@@ -1,5 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type {
+  AccessKeyCredentials,
   Credentials,
   OAuthCredentials,
   PasswordCredentials,
@@ -58,6 +59,23 @@ export class CredentialsService {
       };
     }
 
+    if (credentials.kind === "access_key") {
+      return {
+        ...base,
+        authType: "access_key",
+        secretCiphertext: this.crypto.encrypt(
+          dataKey,
+          JSON.stringify({
+            accessKeyId: credentials.accessKeyId,
+            secretAccessKey: credentials.secretAccessKey,
+            region: credentials.region,
+          }),
+          aad(sourceId, "secret"),
+        ),
+        secretHint: credentials.accessKeyId.slice(-4),
+      };
+    }
+
     return {
       ...base,
       authType: "oauth2",
@@ -93,6 +111,11 @@ export class CredentialsService {
     if (row.authType === "password") {
       const parsed = JSON.parse(secret) as Omit<PasswordCredentials, "kind">;
       return { kind: "password", ...parsed };
+    }
+
+    if (row.authType === "access_key") {
+      const parsed = JSON.parse(secret) as Omit<AccessKeyCredentials, "kind">;
+      return { kind: "access_key", ...parsed };
     }
 
     return {

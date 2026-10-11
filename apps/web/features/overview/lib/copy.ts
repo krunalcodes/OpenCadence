@@ -95,6 +95,8 @@ const mailboxStatusLabels: Record<MailboxStatus, string> = {
 };
 
 const alertTitles: Record<AlertCode, (alert: OverviewAlert) => string> = {
+  domain_failing: (alert) =>
+    `${alert.name ?? "A sending domain"} is failing its DNS checks.`,
   source_needs_attention: (alert) =>
     `${alert.name ?? "A source"} needs attention.`,
   source_paused: (alert) => `${alert.name ?? "A source"} is paused.`,
@@ -105,6 +107,7 @@ const alertTitles: Record<AlertCode, (alert: OverviewAlert) => string> = {
 };
 
 const alertActions: Record<AlertCode, string> = {
+  domain_failing: "Fix DNS records",
   source_needs_attention: "Fix source",
   source_paused: "Review source",
   campaign_failed: "Open campaign",
@@ -116,6 +119,8 @@ function alertBody(alert: OverviewAlert, range: OverviewRangeId) {
   const more = (one: string, many: string) =>
     alert.others > 0 ? ` ${plural(alert.others, one, many)}.` : "";
   switch (alert.code) {
+    case "domain_failing":
+      return `Receivers cannot authenticate mail from it, so it is more likely to land in spam or be rejected.${more("other domain is failing too", "other domains are failing too")}`;
     case "source_needs_attention":
       return `Nothing can go out through it until it is reconnected.${more("other source has the same problem", "other sources have the same problem")}`;
     case "source_paused":

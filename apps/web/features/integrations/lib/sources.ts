@@ -21,16 +21,68 @@ export type SendingSource = {
   details: {
     permission?: "full" | "sending";
     domains?: { name: string; status: string }[];
-    webhook?: "registered" | "not_registered";
+    webhook?: WebhookState;
+    account?: SourceAccount;
+    identities?: SourceIdentity[];
+    identitiesTruncated: boolean;
+    events?: SourceEvents;
   };
+  replyDetection: ReplyDetection;
   health: SourceHealthDay[];
 };
 
-export type Connectable = { gmail: boolean };
+export type WebhookState = "registered" | "pending" | "not_registered";
+
+export type ReplyDetection =
+  | "on"
+  | "off"
+  | "not_enabled"
+  | "always"
+  | "unsupported";
+
+export type SourceAccount = {
+  region: string;
+  sandbox: boolean;
+  sendingEnabled: boolean;
+  quota: {
+    max24HourSend: number | null;
+    maxSendRate: number | null;
+    sentLast24Hours: number | null;
+  };
+  configurationSet: string | null;
+};
+
+export type SourceIdentity = {
+  name: string;
+  type: "email" | "domain";
+  verified: boolean;
+};
+
+export type SourceEvents = {
+  webhookUrl: string | null;
+  topicArn: string | null;
+  destination: "configured" | "manual" | null;
+};
+
+type ProviderFlags = { gmail: boolean; outlook: boolean };
+
+export type Connectable = ProviderFlags;
+
+export type ServerSetup = {
+  connectable: ProviderFlags;
+  replyDetection: ProviderFlags;
+  redirectUris: { gmail: string | null; outlook: string | null };
+};
 
 export type SourcesResult =
-  | { state: "ready"; sources: SendingSource[]; connectable: Connectable }
+  | ({ state: "ready"; sources: SendingSource[] } & ServerSetup)
   | { state: "failed" };
+
+export type EventTopicResult = {
+  source: SendingSource;
+  destination: "configured" | "manual";
+  error: { code: string; message: string } | null;
+};
 
 export type EventSeverity = "info" | "warning" | "error";
 
@@ -83,7 +135,64 @@ function countOf(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function numberOrNull(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 const statuses: SourceStatus[] = ["active", "paused", "needs_attention"];
+const webhookStates: WebhookState[] = [
+  "registered",
+  "pending",
+  "not_registered",
+];
+const replyStates: ReplyDetection[] = [
+  "on",
+  "off",
+  "not_enabled",
+  "always",
+  "unsupported",
+];
+
+function toAccount(value: unknown): SourceAccount | undefined {
+  if (!isRow(value)) {
+    return undefined;
+  }
+  const region = textOrNull(value.region);
+  if (!region) {
+    return undefined;
+  }
+  const quota = isRow(value.quota) ? value.quota : {};
+  return {
+    region,
+    sandbox: value.sandbox === true,
+    sendingEnabled: value.sendingEnabled === true,
+    quota: {
+      max24HourSend: numberOrNull(quota.max24HourSend),
+      maxSendRate: numberOrNull(quota.maxSendRate),
+      sentLast24Hours: numberOrNull(quota.sentLast24Hours),
+    },
+    configurationSet: textOrNull(value.configurationSet),
+  };
+}
+
+function toEvents(value: unknown): SourceEvents | undefined {
+  if (!isRow(value)) {
+    return undefined;
+  }
+  return {
+    webhookUrl: textOrNull(value.webhookUrl),
+    topicArn: textOrNull(value.topicArn),
+    destination:
+      value.destination === "configured" || value.destination === "manual"
+        ? value.destination
+        : null,
+  };
+}
+
+function flagsOf(value: unknown): ProviderFlags {
+  const row = isRow(value) ? value : {};
+  return { gmail: row.gmail === true, outlook: row.outlook === true };
+}
 const healthDays: HealthDay[] = ["healthy", "warning", "failing", "none"];
 const severities: EventSeverity[] = ["info", "warning", "error"];
 
@@ -128,11 +237,21 @@ export function toSource(value: unknown): SendingSource | null {
             status: textOrNull(domain.status) ?? "",
           }))
         : undefined,
-      webhook:
-        details.webhook === "registered" || details.webhook === "not_registered"
-          ? details.webhook
-          : undefined,
+      webhook: webhookStates.find((state) => state === details.webhook),
+      account: toAccount(details.account),
+      identities: Array.isArray(details.identities)
+        ? rowsOf(details.identities).map((identity) => ({
+            name: textOrNull(identity.name) ?? "",
+            type: identity.type === "email" ? "email" : "domain",
+            verified: identity.verified === true,
+          }))
+        : undefined,
+      identitiesTruncated: details.identitiesTruncated === true,
+      events: toEvents(details.events),
     },
+    replyDetection:
+      replyStates.find((state) => state === value.replyDetection) ??
+      "unsupported",
     health: rowsOf(value.health).map((day) => ({
       day: textOrNull(day.day) ?? "",
       health: healthDays.find((health) => health === day.health) ?? "none",
@@ -143,17 +262,22 @@ export function toSource(value: unknown): SendingSource | null {
 
 export function toSourcesList(
   value: unknown,
-): { sources: SendingSource[]; connectable: Connectable } | null {
+): ({ sources: SendingSource[] } & ServerSetup) | null {
   if (!isRow(value) || !Array.isArray(value.sources)) {
     return null;
   }
-  const connectable = isRow(value.connectable) ? value.connectable : {};
+  const redirectUris = isRow(value.redirectUris) ? value.redirectUris : {};
   return {
     sources: value.sources.flatMap((item) => {
       const source = toSource(item);
       return source ? [source] : [];
     }),
-    connectable: { gmail: connectable.gmail === true },
+    connectable: flagsOf(value.connectable),
+    replyDetection: flagsOf(value.replyDetection),
+    redirectUris: {
+      gmail: textOrNull(redirectUris.gmail),
+      outlook: textOrNull(redirectUris.outlook),
+    },
   };
 }
 
@@ -217,9 +341,42 @@ export function isNearLimit(source: SendingSource) {
   );
 }
 
+export function isSignInMailbox(source: SendingSource) {
+  return (
+    source.integrationType === "gmail" || source.integrationType === "outlook"
+  );
+}
+
+export function verifiedIdentities(source: SendingSource) {
+  return (source.details.identities ?? [])
+    .filter((identity) => identity.verified)
+    .map((identity) => identity.name);
+}
+
+export function toEventTopicResult(value: unknown): EventTopicResult | null {
+  if (!isRow(value)) {
+    return null;
+  }
+  const source = toSource(value.source);
+  if (!source) {
+    return null;
+  }
+  const error = isRow(value.error) ? value.error : null;
+  return {
+    source,
+    destination: value.destination === "configured" ? "configured" : "manual",
+    error: error
+      ? {
+          code: textOrNull(error.code) ?? "",
+          message: textOrNull(error.message) ?? "",
+        }
+      : null,
+  };
+}
+
 export function needsReconnect(source: SendingSource) {
   return (
-    source.integrationType === "gmail" &&
+    isSignInMailbox(source) &&
     source.status === "needs_attention" &&
     source.lastError?.code === "auth_revoked"
   );

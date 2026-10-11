@@ -9,7 +9,6 @@ import { SegmentsWorkerModule } from "../segments/segments.worker.module";
 import { SuppressionWorkerModule } from "../suppression/suppression.worker.module";
 import { SequenceEnrollProcessor } from "./jobs/sequence-enroll.processor";
 import { SequenceOutcomesProcessor } from "./jobs/sequence-outcomes.processor";
-import { SequenceRepliesProcessor } from "./jobs/sequence-replies.processor";
 import { SequenceTickProcessor } from "./jobs/sequence-tick.processor";
 import { sequencesProviders, sequencesQueues } from "./sequences.module";
 
@@ -29,7 +28,6 @@ import { sequencesProviders, sequencesQueues } from "./sequences.module";
     SequenceTickProcessor,
     SequenceEnrollProcessor,
     SequenceOutcomesProcessor,
-    SequenceRepliesProcessor,
   ],
 })
 export class SequencesWorkerModule {}

@@ -1,11 +1,17 @@
 import type { IntegrationAdapter } from "@workspace/integration-core";
 import { createContext, type GmailAdapterConfig } from "./config";
 import { fetchIdentity } from "./identity";
+import { createInbox } from "./inbox";
 import { createOAuth } from "./oauth";
 import { requireAccessToken, send } from "./send";
 
 export type { GmailAdapterConfig } from "./config";
-export { gmailScopes, gmailSendScope } from "./config";
+export {
+  gmailInboxScopes,
+  gmailReadScope,
+  gmailScopes,
+  gmailSendScope,
+} from "./config";
 
 export function createGmailAdapter(
   config: GmailAdapterConfig,
@@ -15,10 +21,11 @@ export function createGmailAdapter(
     type: "gmail",
     name: "Gmail",
     auth: "oauth2",
-    capabilities: ["send"],
+    capabilities: context.inboxAccess ? ["send", "replies"] : ["send"],
     verify: async (credentials) =>
       fetchIdentity(context, requireAccessToken(credentials)),
     send: (credentials, message) => send(context, credentials, message),
     oauth: createOAuth(context),
+    ...(context.inboxAccess ? { inbox: createInbox(context) } : {}),
   };
 }

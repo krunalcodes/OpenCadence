@@ -1,6 +1,8 @@
 import { AppShell } from "@/components/app-shell/app-shell";
 import { FirstWorkspace } from "@/components/app-shell/first-workspace";
+import { getInboxSummary } from "@/lib/inbox-summary";
 import { initialsOf } from "@/lib/initials";
+import { inboxUnreadCountId } from "@/lib/navigation";
 import {
   getActiveWorkspace,
   getWorkspaces,
@@ -14,10 +16,11 @@ type AppLayoutProps = {
 
 export default async function AppLayout({ children }: AppLayoutProps) {
   const session = await requireSession();
-  const [workspaces, workspace, warmup] = await Promise.all([
+  const [workspaces, workspace, warmup, inbox] = await Promise.all([
     getWorkspaces(),
     getActiveWorkspace(),
     getWarmupSummary(),
+    getInboxSummary(),
   ]);
   const user = {
     name: session.user.name || session.user.email,
@@ -35,7 +38,10 @@ export default async function AppLayout({ children }: AppLayoutProps) {
       workspace={workspace}
       workspaces={workspaces}
       activeWorkspaceId={session.session.activeOrganizationId ?? null}
-      viewCounts={{ "warming-up": warmup?.warming }}
+      viewCounts={{
+        "warming-up": warmup?.warming,
+        [inboxUnreadCountId]: inbox?.unreadCount,
+      }}
       warmup={warmup}
     >
       {children}

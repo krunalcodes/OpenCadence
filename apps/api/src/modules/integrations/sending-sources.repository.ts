@@ -197,6 +197,21 @@ export class SendingSourcesRepository {
     return row ?? null;
   }
 
+  listScopes(sourceIds: string[]) {
+    if (sourceIds.length === 0) {
+      return Promise.resolve(
+        [] as { sourceId: string; scopes: string[] | null }[],
+      );
+    }
+    return this.db
+      .select({
+        sourceId: sendingSourceCredentials.sourceId,
+        scopes: sendingSourceCredentials.scopes,
+      })
+      .from(sendingSourceCredentials)
+      .where(inArray(sendingSourceCredentials.sourceId, sourceIds));
+  }
+
   async lockCredentials(sourceId: string, executor: Executor) {
     const [row] = await executor
       .select()

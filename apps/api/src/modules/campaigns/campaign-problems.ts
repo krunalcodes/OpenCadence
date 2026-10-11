@@ -17,6 +17,7 @@ export type CampaignProblem = {
 };
 
 export const unsubscribeKey = "unsubscribe_url";
+export const preferencesKey = "preferences_url";
 export const brandMergeKeys = ["brand.name", "brand.address", "brand.website"];
 
 const namedTags = 5;
@@ -26,6 +27,7 @@ export function knownMergeKeys(fieldKeys: string[]) {
     ...contactMergeKeys,
     ...brandMergeKeys,
     unsubscribeKey,
+    preferencesKey,
     ...fieldKeys.map((key) => `fields.${key}`),
   ]);
 }

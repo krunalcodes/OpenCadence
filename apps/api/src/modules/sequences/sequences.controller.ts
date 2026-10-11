@@ -28,6 +28,13 @@ const settingsProperties = {
     description: "The mailboxes this sequence rotates across.",
   },
   fromName: { type: "string", nullable: true, maxLength: 120 },
+  fromEmail: {
+    type: "string",
+    nullable: true,
+    format: "email",
+    description:
+      "The from address for sources without a fixed address, such as an email provider. A mailbox always sends as its own address. Send null or an empty string to clear it.",
+  },
   trackOpens: { type: "boolean" },
   trackClicks: { type: "boolean" },
   stopOnReply: { type: "boolean" },
@@ -101,6 +108,44 @@ export class SequencesController {
     @Body() input: unknown,
   ) {
     return this.sequences.create(workspace, input);
+  }
+
+  @Post("from-draft")
+  @WorkspaceAuth("session", "apiKey")
+  @ApiOperation({
+    summary: "Create a sequence from drafted emails",
+    description:
+      "Creates one template per step, then a draft sequence with those steps in order. The html of each step is reduced to plain outreach markup (p, br, a, strong, em, ul, li) and its text version is derived from it. The first step starts the thread and later steps are replies unless threadMode says otherwise. A taken name returns 409 with the code name_taken. If anything fails, nothing is left behind.",
+  })
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["name", "steps"],
+      properties: {
+        name: { type: "string", minLength: 1, maxLength: 120 },
+        steps: {
+          type: "array",
+          minItems: 1,
+          maxItems: 10,
+          items: {
+            type: "object",
+            required: ["waitMinutes", "html"],
+            properties: {
+              waitMinutes: { type: "integer", minimum: 0 },
+              subject: { type: "string", maxLength: 998 },
+              html: { type: "string", maxLength: 100000 },
+              threadMode: { type: "string", enum: ["reply", "new"] },
+            },
+          },
+        },
+      },
+    },
+  })
+  createFromDraft(
+    @CurrentWorkspace() workspace: WorkspaceAuthContext,
+    @Body() input: unknown,
+  ) {
+    return this.sequences.createFromDraft(workspace, input);
   }
 
   @Get(":id")

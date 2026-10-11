@@ -31,11 +31,12 @@ export type FakeMessage = {
   inReplyTo?: string;
   references?: string;
   internalDate?: Date;
+  date?: Date;
   from?: { name?: string; address?: string }[];
   to?: { name?: string; address?: string }[];
   rawHeaders?: string[];
   bodyStructure?: MessageStructureObject;
-  parts?: Record<string, string>;
+  parts?: Record<string, string | Buffer>;
 };
 
 export type FakeMailbox = {
@@ -172,6 +173,7 @@ export function createFakeImap(setup: FakeImapSetup = {}) {
         subject: message.subject,
         from: message.from,
         to: message.to,
+        date: message.date,
       },
       internalDate: message.internalDate,
       headers: headerBlock(message, query.headers),
@@ -188,7 +190,10 @@ export function createFakeImap(setup: FakeImapSetup = {}) {
                 : [
                     [
                       key.toLowerCase(),
-                      Buffer.from(content).subarray(0, length),
+                      (typeof content === "string"
+                        ? Buffer.from(content)
+                        : content
+                      ).subarray(0, length),
                     ] as const,
                   ];
             }),

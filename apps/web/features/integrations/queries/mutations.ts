@@ -1,9 +1,12 @@
+import type { MailboxProvider } from "@/features/integrations/lib/catalog";
 import {
   type EventFilters,
   type EventsPage,
+  type EventTopicResult,
   eventsQuery,
   type SendingSource,
   toEventsPage,
+  toEventTopicResult,
   toSource,
 } from "@/features/integrations/lib/sources";
 import {
@@ -56,19 +59,53 @@ export async function connectMailbox(input: {
   return asSource(await request("POST", "/sending-sources/imap-smtp", input));
 }
 
-export async function authorizeGmail(input: {
-  dailySendLimit?: number;
-}): Promise<ApiResult<{ url: string }>> {
-  const result = await request(
-    "POST",
-    "/sending-sources/gmail/authorize",
-    input,
-  );
+export async function connectSes(input: {
+  name: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  region: string;
+  configurationSet?: string;
+}) {
+  return asSource(await request("POST", "/sending-sources/ses", input));
+}
+
+function asUrl(result: ApiResult<unknown>): ApiResult<{ url: string }> {
   if (!result.ok) {
     return result;
   }
   const url = isRow(result.data) ? textOrNull(result.data.url) : null;
   return url ? { ok: true, data: { url } } : { ok: false, error: malformed };
+}
+
+export async function authorizeMailbox(
+  provider: MailboxProvider,
+  input: { dailySendLimit?: number },
+) {
+  return asUrl(
+    await request("POST", `/sending-sources/${provider}/authorize`, input),
+  );
+}
+
+export async function startReplyDetection(id: string) {
+  return asUrl(await request("POST", sourcePath(id, "/reply-detection")));
+}
+
+export async function stopReplyDetection(id: string) {
+  return asSource(await request("DELETE", sourcePath(id, "/reply-detection")));
+}
+
+export async function saveEventTopic(
+  id: string,
+  topicArn: string,
+): Promise<ApiResult<EventTopicResult>> {
+  const result = await request("PUT", sourcePath(id, "/event-topic"), {
+    topicArn,
+  });
+  if (!result.ok) {
+    return result;
+  }
+  const saved = toEventTopicResult(result.data);
+  return saved ? { ok: true, data: saved } : { ok: false, error: malformed };
 }
 
 export async function updateSource(

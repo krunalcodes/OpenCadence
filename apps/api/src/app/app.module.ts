@@ -14,10 +14,14 @@ import { BrandModule } from "../modules/brand/brand.module";
 import { CampaignsModule } from "../modules/campaigns/campaigns.module";
 import { ContactsModule } from "../modules/contacts/contacts.module";
 import { DispatchModule } from "../modules/dispatch/dispatch.module";
+import { DomainsModule } from "../modules/domains/domains.module";
+import { FormsModule } from "../modules/forms/forms.module";
 import { ImportsModule } from "../modules/imports/imports.module";
+import { InboxModule } from "../modules/inbox/inbox.module";
 import { IntegrationsModule } from "../modules/integrations/integrations.module";
 import { ListsModule } from "../modules/lists/lists.module";
 import { MediaModule } from "../modules/media/media.module";
+import { PreferencesModule } from "../modules/preferences/preferences.module";
 import { ProviderEventsModule } from "../modules/provider-events/provider-events.module";
 import { SegmentsModule } from "../modules/segments/segments.module";
 import { SequencesModule } from "../modules/sequences/sequences.module";
@@ -53,6 +57,7 @@ import { AppService } from "./app.service";
     TrackingModule,
     TransactionalModule,
     WarmupModule,
+    DomainsModule,
     ListsModule,
     TagsModule,
     ContactsModule,
@@ -62,7 +67,10 @@ import { AppService } from "./app.service";
     TemplatesModule,
     CampaignsModule,
     SequencesModule,
+    InboxModule,
     ImportsModule,
+    FormsModule,
+    PreferencesModule,
     AiModule,
     AnalyticsModule,
   ],

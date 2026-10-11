@@ -14,6 +14,11 @@ export async function createList(input: ListInput) {
     await request("POST", "/lists", {
       name: input.name,
       ...(input.description === "" ? {} : { description: input.description }),
+      isPublic: input.isPublic,
+      ...(input.publicName === "" ? {} : { publicName: input.publicName }),
+      ...(input.publicDescription === ""
+        ? {}
+        : { publicDescription: input.publicDescription }),
     }),
   );
 }
@@ -23,6 +28,10 @@ export async function updateList(id: string, input: ListInput) {
     await request("PATCH", `/lists/${encodeURIComponent(id)}`, {
       name: input.name,
       description: input.description === "" ? null : input.description,
+      isPublic: input.isPublic,
+      publicName: input.publicName === "" ? null : input.publicName,
+      publicDescription:
+        input.publicDescription === "" ? null : input.publicDescription,
     }),
   );
 }

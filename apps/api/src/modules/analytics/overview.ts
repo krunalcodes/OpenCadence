@@ -104,6 +104,7 @@ export type OverviewMailbox = {
 };
 
 export type OverviewAlertCode =
+  | "domain_failing"
   | "source_needs_attention"
   | "source_paused"
   | "campaign_failed"
@@ -112,7 +113,11 @@ export type OverviewAlertCode =
 
 export type OverviewAlert = {
   code: OverviewAlertCode;
-  entity: { type: "source" | "campaign"; id: string; name: string } | null;
+  entity: {
+    type: "domain" | "source" | "campaign";
+    id: string;
+    name: string;
+  } | null;
   others: number;
   rate: number | null;
   path: string;
@@ -475,12 +480,23 @@ export function campaignBlock(
 }
 
 export type AlertInput = {
+  failingDomains: { id: string; name: string }[];
   sources: { id: string; name: string; status: string }[];
   failedCampaigns: { id: string; name: string }[];
   totals: OverviewTotals;
 };
 
 export function pickAlert(input: AlertInput): OverviewAlert | null {
+  const [domain, ...otherDomains] = input.failingDomains;
+  if (domain) {
+    return {
+      code: "domain_failing",
+      entity: { type: "domain", id: domain.id, name: domain.name },
+      others: otherDomains.length,
+      rate: null,
+      path: "domains",
+    };
+  }
   const ofStatus = (status: string) =>
     input.sources.filter((source) => source.status === status);
   for (const [status, code] of [

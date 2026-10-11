@@ -18,7 +18,6 @@ import {
   secondaryButtonClass,
 } from "@/components/product/styles";
 import { Spinner } from "@/components/spinner";
-import { useAiStream } from "@/features/templates/hooks/use-ai-stream";
 import { useEditorScope } from "@/features/templates/hooks/use-editor-scope";
 import {
   maxContextLength,
@@ -35,6 +34,7 @@ import {
   selectedText,
   selectionRange,
 } from "@/features/templates/lib/editor";
+import { useAiStream } from "@/hooks/use-ai-stream";
 
 const text = copy.ai.rewrite;
 

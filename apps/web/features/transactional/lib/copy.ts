@@ -31,6 +31,7 @@ export const kindLabels: Record<EmailKind, string> = {
   transactional: "Transactional",
   campaign: "Campaign",
   sequence: "Sequence",
+  reply: "Inbox reply",
   test: "Test email",
 };
 

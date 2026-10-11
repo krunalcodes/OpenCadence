@@ -10,6 +10,7 @@ export type AreaId =
 export type NavPage = {
   title: string;
   path: string;
+  countId?: string;
   count?: string;
   keywords?: string;
 };
@@ -25,9 +26,16 @@ export type NavArea = {
   id: AreaId;
   title: string;
   attention?: boolean;
+  countId?: string;
+  count?: string;
+  countNoun?: string;
   pages: NavPage[];
   views: NavView[];
 };
+
+export const inboxUnreadCountId = "inbox-unread";
+
+const maxShownCount = 99;
 
 export const areas: NavArea[] = [
   {
@@ -39,7 +47,16 @@ export const areas: NavArea[] = [
   {
     id: "inbox",
     title: "Inbox",
-    pages: [{ title: "Inbox", path: "inbox" }],
+    countId: inboxUnreadCountId,
+    countNoun: "unread",
+    pages: [
+      {
+        title: "Inbox",
+        path: "inbox",
+        countId: inboxUnreadCountId,
+        keywords: "replies conversations threads unread mailbox",
+      },
+    ],
     views: [],
   },
   {
@@ -151,9 +168,23 @@ export const areas: NavArea[] = [
 
 export type ViewCounts = Record<string, number | undefined>;
 
+function shownCount(id: string | undefined, counts: ViewCounts) {
+  const count = id ? counts[id] : undefined;
+  if (count === undefined || count <= 0) {
+    return undefined;
+  }
+  return count > maxShownCount ? `${maxShownCount}+` : String(count);
+}
+
 export function withViewCounts(area: NavArea, counts: ViewCounts): NavArea {
   return {
     ...area,
+    count: area.countId ? shownCount(area.countId, counts) : area.count,
+    pages: area.pages.map((page) =>
+      page.countId
+        ? { ...page, count: shownCount(page.countId, counts) }
+        : page,
+    ),
     views: area.views.map((view) => {
       const count = view.id ? counts[view.id] : undefined;
       return view.id

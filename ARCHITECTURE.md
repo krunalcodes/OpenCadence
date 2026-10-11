@@ -52,9 +52,9 @@ OpenCadence/
 │   ├── gmail/                                                         (exists)
 │   ├── resend/                                                        (exists)
 │   ├── imap-smtp/           any mailbox over IMAP and SMTP            (exists)
-│   ├── ses/
+│   ├── ses/                 Amazon SES, events through SNS            (exists)
 │   ├── smtp/
-│   ├── outlook/
+│   ├── outlook/             Outlook and Microsoft 365 mailboxes       (exists)
 │   └── sendgrid/
 ├── deploy/                  production packaging
 │   ├── docker/              Dockerfiles for api and web
@@ -115,7 +115,8 @@ apps/api/
 │       ├── tags/ (exists)
 │       ├── segments/ (exists)
 │       ├── imports/               CSV and tool imports, contact export (exists)
-│       ├── forms/                 subscription forms and public pages
+│       ├── forms/                 subscription forms, double opt-in, public form endpoints (exists)
+│       ├── preferences/           the preference centre behind the link in emails (exists)
 │       ├── consent/               consent records, export and erasure requests
 │       ├── suppression/           unsubscribes, bounces, complaints, blocklist (exists)
 │       ├── templates/ (exists)
@@ -125,9 +126,9 @@ apps/api/
 │       ├── campaigns/ (exists)
 │       ├── sequences/ (exists)
 │       ├── transactional/         the send-one-email API              (exists)
-│       ├── inbox/                 unified reply inbox
+│       ├── inbox/                 unified reply inbox, mailbox polling (exists)
 │       ├── integrations/          connected mailboxes and providers   (exists)
-│       ├── domains/               sending and tracking domains, DNS checks
+│       ├── domains/               sending domains and DNS checks (exists); tracking domains planned
 │       ├── warmup/ (exists)
 │       ├── dispatch/              the send pipeline: limits, rotation, retries (exists)
 │       ├── tracking/              open, click, and unsubscribe endpoints (exists)

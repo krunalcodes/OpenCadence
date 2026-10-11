@@ -31,7 +31,7 @@ export const originLabels: Record<SuppressionOrigin, string> = {
 export const copy = {
   title: "Suppression list",
   description:
-    "Addresses that will not be emailed. Bounces and complaints are added automatically and block every email. Unsubscribes block campaigns and sequences, but not transactional email.",
+    "Addresses that will not be emailed. Bounces and complaints are added automatically and block every email. Unsubscribes block campaigns and sequences, but not transactional email or replies you send from the inbox.",
   add: "Add addresses",
   searchLabel: "Search by email address",
   searchPlaceholder: "Search by email",
@@ -98,7 +98,7 @@ export const copy = {
       manual:
         "No email of any kind goes to these addresses, including transactional email.",
       unsubscribed:
-        "Campaigns and sequences skip these addresses. Transactional email still goes out.",
+        "Campaigns and sequences skip these addresses. Transactional email and replies sent from the inbox still go out.",
     } as Record<AddReason, string>,
     note: "Note",
     noteOptional: "Optional",

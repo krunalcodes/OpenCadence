@@ -15,10 +15,11 @@ import {
 } from "@workspace/ui/components/toggle-group";
 import { cn } from "@workspace/ui/lib/utils";
 import { Info, TriangleAlert } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { focusRing } from "@/components/app-shell/page-header";
 import { SourceMultiSelect } from "@/components/pickers/source-combobox";
+import { TimePicker } from "@/components/pickers/time-picker";
 import { OptionCombobox } from "@/components/product/option-combobox";
 import { SectionCard } from "@/components/product/section-card";
 import { inputClass, primaryButtonClass } from "@/components/product/styles";
@@ -26,31 +27,42 @@ import { Spinner } from "@/components/spinner";
 import { copy, describeError } from "@/features/sequences/lib/copy";
 import {
   browserTimezone,
-  minutesToTime,
   parseDailyLimit,
-  timeToMinutes,
   timezoneLabel,
   timezoneOptions,
   weekdays,
 } from "@/features/sequences/lib/schedule";
 import {
+  isEmail,
   maxDailyLimit,
+  maxFromEmailLength,
   maxFromNameLength,
   type Sequence,
   type SequenceSettings,
 } from "@/features/sequences/lib/sequences";
 import { updateSequence } from "@/features/sequences/queries/client";
+import { minutesPerDay } from "@/lib/date-time";
 import type { SourceChoice } from "@/lib/sources";
 
 const text = copy.settings;
 
+export const fromEmailFieldId = "sequence-from-email";
+
+const focusDelay = 80;
+
 type SettingsTabProps = {
   sequence: Sequence;
   sources: SourceChoice[];
+  fromEmailFocus: number;
   onSaved: (sequence: Sequence) => void;
 };
 
-export function SettingsTab({ sequence, sources, onSaved }: SettingsTabProps) {
+export function SettingsTab({
+  sequence,
+  sources,
+  fromEmailFocus,
+  onSaved,
+}: SettingsTabProps) {
   const locked = sequence.status === "archived";
 
   return (
@@ -59,6 +71,7 @@ export function SettingsTab({ sequence, sources, onSaved }: SettingsTabProps) {
         sequence={sequence}
         sources={sources}
         locked={locked}
+        fromEmailFocus={fromEmailFocus}
         onSaved={onSaved}
       />
       <div className="flex min-w-0 flex-col gap-[18px]">
@@ -124,7 +137,8 @@ function SendingForm({
   sources,
   locked,
   onSaved,
-}: FormProps & { sources: SourceChoice[] }) {
+  fromEmailFocus,
+}: FormProps & { sources: SourceChoice[]; fromEmailFocus: number }) {
   const labels = text.sending;
   const savedIds = useMemo(
     () => sequence.sources.map((source) => source.id),
@@ -132,6 +146,7 @@ function SendingForm({
   );
   const [sourceIds, setSourceIds] = useState(savedIds);
   const [fromName, setFromName] = useState(sequence.fromName ?? "");
+  const [fromEmail, setFromEmail] = useState(sequence.fromEmail ?? "");
   const [limit, setLimit] = useState(
     sequence.dailyLimitPerSource === null
       ? ""
@@ -140,9 +155,22 @@ function SendingForm({
   const [errors, setErrors] = useState<{
     sources?: string;
     fromName?: string;
+    fromEmail?: string;
     limit?: string;
   }>({});
   const { pending, save } = useSave(sequence, onSaved);
+
+  useEffect(() => {
+    if (fromEmailFocus === 0) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const field = document.getElementById(fromEmailFieldId);
+      field?.scrollIntoView({ block: "center" });
+      field?.focus({ preventScroll: true });
+    }, focusDelay);
+    return () => window.clearTimeout(timer);
+  }, [fromEmailFocus]);
 
   const choices = useMemo(() => {
     const known = new Set(sources.map((source) => source.id));
@@ -170,9 +198,17 @@ function SendingForm({
       )
     : [];
   const cleanFromName = fromName.trim();
+  const cleanFromEmail = fromEmail.trim();
+  const addressless =
+    cleanFromEmail === ""
+      ? choices.filter(
+          (source) => source.email === null && sourceIds.includes(source.id),
+        )
+      : [];
   const changed =
     !sameIds(sourceIds, savedIds) ||
     cleanFromName !== (sequence.fromName ?? "") ||
+    cleanFromEmail !== (sequence.fromEmail ?? "") ||
     limit.trim() !==
       (sequence.dailyLimitPerSource === null
         ? ""
@@ -188,16 +224,23 @@ function SendingForm({
     if (cleanFromName.length > maxFromNameLength) {
       next.fromName = labels.fromNameTooLong(maxFromNameLength);
     }
+    if (cleanFromEmail !== "" && !isEmail(cleanFromEmail)) {
+      next.fromEmail = labels.fromEmailInvalid;
+    }
     if (!parsed.ok) {
       next.limit = labels.dailyLimitInvalid(maxDailyLimit);
     }
     setErrors(next);
-    if (!parsed.ok || next.fromName) {
+    if (!parsed.ok || next.fromName || next.fromEmail) {
+      if (next.fromEmail && !next.fromName) {
+        document.getElementById(fromEmailFieldId)?.focus();
+      }
       return;
     }
     const error = await save({
       sourceIds,
       fromName: cleanFromName === "" ? null : cleanFromName,
+      fromEmail: cleanFromEmail === "" ? null : cleanFromEmail,
       dailyLimitPerSource: parsed.value,
     });
     if (!error) {
@@ -208,6 +251,8 @@ function SendingForm({
       setErrors({ sources: message });
     } else if (error.field === "fromName") {
       setErrors({ fromName: message });
+    } else if (error.field === "fromEmail") {
+      setErrors({ fromEmail: message });
     } else if (error.field === "dailyLimitPerSource") {
       setErrors({ limit: message });
     } else {
@@ -303,6 +348,62 @@ function SendingForm({
             )}
           </Field>
 
+          <Field data-invalid={errors.fromEmail ? true : undefined}>
+            <FieldLabel htmlFor={fromEmailFieldId} className="text-[13px]">
+              {labels.fromEmail}
+            </FieldLabel>
+            <Input
+              id={fromEmailFieldId}
+              type="email"
+              inputMode="email"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={pending || locked}
+              maxLength={maxFromEmailLength}
+              placeholder={labels.fromEmailPlaceholder}
+              value={fromEmail}
+              onChange={(event) => {
+                setFromEmail(event.target.value);
+                setErrors((current) => ({ ...current, fromEmail: undefined }));
+              }}
+              aria-invalid={errors.fromEmail ? true : undefined}
+              aria-describedby={
+                errors.fromEmail
+                  ? "sequence-from-email-error"
+                  : "sequence-from-email-hint"
+              }
+              className={cn(inputClass, "max-w-[420px] md:text-[13px]")}
+            />
+            {errors.fromEmail ? (
+              <FieldError
+                id="sequence-from-email-error"
+                className="text-[13px] text-danger"
+              >
+                {errors.fromEmail}
+              </FieldError>
+            ) : (
+              <FieldDescription
+                id="sequence-from-email-hint"
+                className="text-[13px]"
+              >
+                {labels.fromEmailHint}
+              </FieldDescription>
+            )}
+            {addressless.length > 0 && !errors.fromEmail ? (
+              <p className="flex items-start gap-1.5 text-[13px] text-warning">
+                <TriangleAlert
+                  aria-hidden
+                  strokeWidth={1.7}
+                  className="mt-0.5 size-3.5 shrink-0"
+                />
+                {labels.fromEmailNeeded(
+                  addressless.map((source) => source.name).join(", "),
+                  addressless.length,
+                )}
+              </p>
+            ) : null}
+          </Field>
+
           <Field data-invalid={errors.limit ? true : undefined}>
             <FieldLabel htmlFor="sequence-daily-limit" className="text-[13px]">
               {labels.dailyLimit}
@@ -359,13 +460,13 @@ function SendingForm({
 const dayItemClass =
   "h-8 w-11 rounded-lg border border-border bg-card px-0 text-[12.5px] font-medium text-muted-foreground shadow-xs hover:bg-muted hover:text-foreground focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary focus-visible:outline-solid aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-brand-hover";
 
+const lastStartMinute = minutesPerDay - 1;
+
 function WindowForm({ sequence, locked, onSaved }: FormProps) {
   const labels = text.window;
-  const savedStart = minutesToTime(sequence.windowStartMinute);
-  const savedEnd = minutesToTime(sequence.windowEndMinute);
   const [days, setDays] = useState(sequence.sendDays);
-  const [start, setStart] = useState(savedStart);
-  const [end, setEnd] = useState(savedEnd);
+  const [start, setStart] = useState<number | null>(sequence.windowStartMinute);
+  const [end, setEnd] = useState<number | null>(sequence.windowEndMinute);
   const [timezone, setTimezone] = useState<string | null>(sequence.timezone);
   const [errors, setErrors] = useState<{
     days?: string;
@@ -382,8 +483,8 @@ function WindowForm({ sequence, locked, onSaved }: FormProps) {
 
   const changed =
     !sameDays(days, sequence.sendDays) ||
-    start !== savedStart ||
-    end !== savedEnd ||
+    start !== sequence.windowStartMinute ||
+    end !== sequence.windowEndMinute ||
     timezone !== sequence.timezone;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -391,10 +492,8 @@ function WindowForm({ sequence, locked, onSaved }: FormProps) {
     if (pending || locked) {
       return;
     }
-    const startMinute =
-      start === savedStart ? sequence.windowStartMinute : timeToMinutes(start);
-    const endMinute =
-      end === savedEnd ? sequence.windowEndMinute : timeToMinutes(end);
+    const startMinute = start;
+    const endMinute = end;
     const next: typeof errors = {};
     if (days.length === 0) {
       next.days = labels.daysMissing;
@@ -490,27 +589,23 @@ function WindowForm({ sequence, locked, onSaved }: FormProps) {
           <div className="flex flex-wrap items-start gap-x-3 gap-y-4">
             <Field
               data-invalid={errors.start ? true : undefined}
-              className="w-32"
+              className="w-36"
             >
               <FieldLabel htmlFor="sequence-start" className="text-[13px]">
                 {labels.start}
               </FieldLabel>
-              <Input
+              <TimePicker
                 id="sequence-start"
-                type="time"
-                step={300}
-                required
-                disabled={pending || locked}
                 value={start}
-                onChange={(event) => {
-                  setStart(event.target.value);
+                max={lastStartMinute}
+                disabled={pending || locked}
+                invalid={Boolean(errors.start)}
+                label={labels.start}
+                describedBy={errors.start ? "sequence-start-error" : undefined}
+                onChange={(value) => {
+                  setStart(value);
                   setErrors((current) => ({ ...current, start: undefined }));
                 }}
-                aria-invalid={errors.start ? true : undefined}
-                aria-describedby={
-                  errors.start ? "sequence-start-error" : undefined
-                }
-                className={cn(inputClass, "tabular-nums md:text-[13px]")}
               />
               {errors.start ? (
                 <FieldError
@@ -523,25 +618,23 @@ function WindowForm({ sequence, locked, onSaved }: FormProps) {
             </Field>
             <Field
               data-invalid={errors.end ? true : undefined}
-              className="w-32"
+              className="w-36"
             >
               <FieldLabel htmlFor="sequence-end" className="text-[13px]">
                 {labels.end}
               </FieldLabel>
-              <Input
+              <TimePicker
                 id="sequence-end"
-                type="time"
-                step={300}
-                required
-                disabled={pending || locked}
                 value={end}
-                onChange={(event) => {
-                  setEnd(event.target.value);
+                max={minutesPerDay}
+                disabled={pending || locked}
+                invalid={Boolean(errors.end)}
+                label={labels.end}
+                describedBy={errors.end ? "sequence-end-error" : undefined}
+                onChange={(value) => {
+                  setEnd(value);
                   setErrors((current) => ({ ...current, end: undefined }));
                 }}
-                aria-invalid={errors.end ? true : undefined}
-                aria-describedby={errors.end ? "sequence-end-error" : undefined}
-                className={cn(inputClass, "tabular-nums md:text-[13px]")}
               />
             </Field>
             <Field

@@ -29,11 +29,15 @@ import {
   SEQUENCE_OUTCOMES_QUEUE,
   type SendJob,
 } from "../src/modules/dispatch/dispatch.constants";
-import { DispatchRepository } from "../src/modules/dispatch/dispatch.repository";
+import {
+  DispatchRepository,
+  type EngagementTotalsRow,
+} from "../src/modules/dispatch/dispatch.repository";
 import {
   type BatchCommon,
   type BatchRecipient,
   DispatchService,
+  type RecordEventInput,
 } from "../src/modules/dispatch/dispatch.service";
 import {
   DispatchMaintenanceProcessor,
@@ -69,6 +73,54 @@ type StubbedQueue = {
   addBulk: (...args: unknown[]) => Promise<unknown>;
 };
 
+const hourMs = 60 * 60 * 1000;
+const dayMs = 24 * hourMs;
+
+const eventPaths: RecordEventInput["type"][][] = [
+  [],
+  ["sent"],
+  ["sent", "delivered"],
+  ["sent", "delivered", "opened", "opened"],
+  ["sent", "clicked", "clicked"],
+  ["sent", "delivered", "bounced"],
+  ["sent", "bounced", "delivered"],
+  ["sent", "bounced", "complained"],
+  ["sent", "delivered", "complained", "opened"],
+  ["sent", "failed"],
+  ["failed"],
+  ["sent", "delayed", "delivered", "replied", "replied"],
+  ["sent", "replied", "unsubscribed"],
+  ["delivered"],
+  ["sent", "delivered", "clicked", "opened", "unsubscribed"],
+];
+const messageAgesInHours = [
+  0.1,
+  0.9,
+  1.6,
+  23.4,
+  24.3,
+  47.6,
+  48.5,
+  7 * 24 - 0.4,
+  7 * 24 + 0.7,
+  14 * 24 - 0.2,
+  14 * 24 + 0.3,
+  30 * 24 - 0.6,
+  30 * 24 + 0.5,
+  60 * 24 - 0.8,
+  60 * 24 + 0.2,
+  90 * 24 - 0.3,
+  90 * 24 + 0.9,
+  180 * 24 - 0.5,
+  180 * 24 + 0.4,
+];
+const messageKinds = ["campaign", "sequence", "transactional", "test"] as const;
+const totalRanges = [24, 7 * 24, 30 * 24, 90 * 24];
+
+function byPeriod(rows: EngagementTotalsRow[]) {
+  return [...rows].sort((a, b) => Number(a.current) - Number(b.current));
+}
+
 function fakeResend() {
   const sent: OutboundMessage[] = [];
   const adapter: IntegrationAdapter = {
@@ -96,6 +148,7 @@ describe("Dispatch for campaigns and sequences (e2e)", () => {
   let suppression: SuppressionService;
   let processor: SendProcessor;
   let maintenance: DispatchMaintenanceProcessor;
+  let repository: DispatchRepository;
   let keys: TrackingKeys;
   let actor: Actor;
   let other: Actor;
@@ -228,7 +281,7 @@ describe("Dispatch for campaigns and sequences (e2e)", () => {
       });
     }
 
-    const repository = app.get(DispatchRepository);
+    repository = app.get(DispatchRepository);
     processor = new SendProcessor(
       repository,
       sources,
@@ -1006,5 +1059,439 @@ describe("Dispatch for campaigns and sequences (e2e)", () => {
       `message_events_${ahead.getUTCFullYear()}_${String(ahead.getUTCMonth() + 1).padStart(2, "0")}`,
     );
     expect(names).not.toContain("message_events_2024_01");
+  });
+
+  describe("hourly totals", () => {
+    let workspaceId: string;
+    let statsSourceId: string;
+    let now: Date;
+
+    const window = (hours: number, to = now) => ({
+      from: new Date(to.getTime() - 2 * hours * hourMs),
+      split: new Date(to.getTime() - hours * hourMs),
+      to,
+    });
+
+    async function insertMessage(
+      createdAt: Date,
+      values: Partial<typeof schema.messages.$inferInsert> = {},
+    ) {
+      const id = uuidv7(createdAt);
+      await db.insert(schema.messages).values({
+        id,
+        createdAt,
+        workspaceId,
+        sourceId: statsSourceId,
+        kind: "campaign",
+        status: "queued",
+        fromEmail: "news@example.com",
+        toEmails: ["totals@example.com"],
+        subject: "Totals",
+        ...values,
+      });
+      return id;
+    }
+
+    async function originalTotals(range: ReturnType<typeof window>) {
+      const result = await db.execute<EngagementTotalsRow>(sql`
+        select
+          created_at >= ${range.split.toISOString()}::timestamptz as "current",
+          (count(*) filter (where status in ('sent', 'delivered', 'delayed', 'bounced', 'complained')))::int as "sent",
+          (count(*) filter (where status in ('delivered', 'complained')))::int as "delivered",
+          (count(*) filter (where status = 'bounced'))::int as "bounced",
+          (count(*) filter (where status = 'complained'))::int as "complained",
+          (count(*) filter (where track_opens and status in ('sent', 'delivered', 'delayed', 'bounced', 'complained')))::int as "trackedSent",
+          (count(*) filter (where track_opens and status in ('delivered', 'complained')))::int as "trackedDelivered",
+          (count(*) filter (where track_opens and first_opened_at is not null))::int as "opened",
+          (count(*) filter (where kind = 'sequence' and status in ('sent', 'delivered', 'delayed', 'bounced', 'complained')))::int as "sequenceSent",
+          (count(*) filter (where kind = 'sequence' and status in ('delivered', 'complained')))::int as "sequenceDelivered",
+          (count(*) filter (where kind = 'sequence' and replied_at is not null))::int as "replied"
+        from messages
+        where workspace_id = ${workspaceId}
+          and created_at >= ${range.from.toISOString()}::timestamptz
+          and created_at < ${range.to.toISOString()}::timestamptz
+          and kind <> 'test'
+        group by 1
+      `);
+      return result.rows;
+    }
+
+    async function expectSameTotals() {
+      for (const hours of totalRanges) {
+        const fromMessages = await originalTotals(window(hours));
+        expect(
+          byPeriod(
+            await repository.engagementTotalsFromMessages(
+              workspaceId,
+              window(hours),
+            ),
+          ),
+        ).toEqual(byPeriod(fromMessages));
+        expect(
+          byPeriod(
+            await repository.engagementTotals(workspaceId, window(hours)),
+          ),
+        ).toEqual(byPeriod(fromMessages));
+        expect(fromMessages).toHaveLength(2);
+        for (const row of fromMessages) {
+          expect(row.sent).toBeGreaterThan(0);
+        }
+      }
+    }
+
+    function statsRows() {
+      return db
+        .select()
+        .from(schema.messageHourlyStats)
+        .where(eq(schema.messageHourlyStats.workspaceId, workspaceId))
+        .orderBy(
+          schema.messageHourlyStats.hour,
+          schema.messageHourlyStats.kind,
+          schema.messageHourlyStats.trackOpens,
+        );
+    }
+
+    const everything = () => ({
+      from: new Date(now.getTime() - 400 * dayMs),
+      to: new Date(Date.now() + hourMs),
+    });
+
+    beforeAll(async () => {
+      const [workspace] = await db
+        .insert(schema.workspaces)
+        .values({ name: "Totals e2e", slug: `totals-e2e-${randomUUID()}` })
+        .returning();
+      if (!workspace) {
+        throw new Error("The totals workspace was not created.");
+      }
+      workspaceId = workspace.id;
+      const [source] = await db
+        .insert(schema.sendingSources)
+        .values({ workspaceId, integrationType: "resend", name: "Totals" })
+        .returning({ id: schema.sendingSources.id });
+      if (!source) {
+        throw new Error("The totals source was not created.");
+      }
+      statsSourceId = source.id;
+
+      const started = Date.now();
+      for (const [ageIndex, age] of messageAgesInHours.entries()) {
+        for (const [pathIndex, path] of eventPaths.entries()) {
+          const id = await insertMessage(new Date(started - age * hourMs), {
+            kind: messageKinds[(ageIndex + pathIndex) % messageKinds.length],
+            trackOpens: (ageIndex + Math.floor(pathIndex / 2)) % 2 === 0,
+          });
+          for (const type of path) {
+            await dispatch.recordEvent({ messageId: id, type });
+          }
+        }
+      }
+      now = new Date();
+    }, 120_000);
+
+    afterAll(async () => {
+      await db
+        .delete(schema.workspaces)
+        .where(eq(schema.workspaces.id, workspaceId));
+    });
+
+    it("match the totals counted from messages on every range", async () => {
+      await expectSameTotals();
+
+      const aligned = new Date(Math.floor(now.getTime() / hourMs) * hourMs);
+      for (const to of [aligned, new Date(aligned.getTime() - 1)]) {
+        expect(
+          byPeriod(
+            await repository.engagementTotals(workspaceId, window(24, to)),
+          ),
+        ).toEqual(
+          byPeriod(
+            await repository.engagementTotalsFromMessages(
+              workspaceId,
+              window(24, to),
+            ),
+          ),
+        );
+      }
+      const short = {
+        from: new Date(now.getTime() - 40 * 60 * 1000),
+        split: new Date(now.getTime() - 20 * 60 * 1000),
+        to: now,
+      };
+      expect(
+        byPeriod(await repository.engagementTotals(workspaceId, short)),
+      ).toEqual(
+        byPeriod(
+          await repository.engagementTotalsFromMessages(workspaceId, short),
+        ),
+      );
+
+      expect(
+        await repository.reconcileHourlyStats(workspaceId, everything()),
+      ).toEqual({ corrected: 0, added: 0 });
+    });
+
+    it("put a late event in the hour the message was created", async () => {
+      const createdAt = new Date(now.getTime() - 20 * dayMs);
+      const id = await insertMessage(createdAt, { trackOpens: true });
+      await dispatch.recordEvent({ messageId: id, type: "sent" });
+      await dispatch.recordEvent({ messageId: id, type: "opened" });
+      const hour = new Date(Math.floor(createdAt.getTime() / hourMs) * hourMs);
+      const rows = (await statsRows()).filter(
+        (row) =>
+          row.hour.getTime() === hour.getTime() &&
+          row.kind === "campaign" &&
+          row.trackOpens,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ sent: 1, opened: 1, delivered: 0 });
+      await expectSameTotals();
+    });
+
+    it("count concurrent events for one hour exactly once", async () => {
+      const createdAt = new Date(now.getTime() - 3 * dayMs);
+      const ids = await Promise.all(
+        Array.from({ length: 12 }, () =>
+          insertMessage(createdAt, { kind: "sequence" }),
+        ),
+      );
+      await Promise.all(
+        ids.map((id) => dispatch.recordEvent({ messageId: id, type: "sent" })),
+      );
+      await Promise.all(
+        ids.flatMap((id) => [
+          dispatch.recordEvent({ messageId: id, type: "delivered" }),
+          dispatch.recordEvent({ messageId: id, type: "replied" }),
+          dispatch.recordEvent({ messageId: id, type: "replied" }),
+        ]),
+      );
+      const hour = new Date(Math.floor(createdAt.getTime() / hourMs) * hourMs);
+      const [row] = (await statsRows()).filter(
+        (item) =>
+          item.hour.getTime() === hour.getTime() &&
+          item.kind === "sequence" &&
+          !item.trackOpens,
+      );
+      expect(row).toMatchObject({ sent: 12, delivered: 12, replied: 12 });
+      await expectSameTotals();
+    });
+
+    it("heal recent hours that drifted", async () => {
+      const before = await statsRows();
+      const recent = new Date(now.getTime() - 5 * hourMs);
+      await insertMessage(recent, { status: "delivered" });
+      await db
+        .update(schema.messages)
+        .set({ status: "bounced" })
+        .where(
+          and(
+            eq(schema.messages.workspaceId, workspaceId),
+            eq(schema.messages.status, "delivered"),
+            sql`${schema.messages.createdAt} >= ${new Date(now.getTime() - 30 * hourMs).toISOString()}::timestamptz`,
+          ),
+        );
+      await db
+        .update(schema.messageHourlyStats)
+        .set({ sent: 999 })
+        .where(
+          and(
+            eq(schema.messageHourlyStats.workspaceId, workspaceId),
+            sql`${schema.messageHourlyStats.hour} >= ${new Date(now.getTime() - 2 * hourMs).toISOString()}::timestamptz`,
+          ),
+        );
+      expect(
+        byPeriod(
+          await repository.engagementTotals(workspaceId, window(7 * 24)),
+        ),
+      ).not.toEqual(
+        byPeriod(
+          await repository.engagementTotalsFromMessages(
+            workspaceId,
+            window(7 * 24),
+          ),
+        ),
+      );
+
+      const result = await maintenance.reconcileHourlyStats(new Date(), [
+        workspaceId,
+      ]);
+      expect(result.corrected + result.added).toBeGreaterThan(0);
+      await expectSameTotals();
+
+      const untouched = (rows: Awaited<ReturnType<typeof statsRows>>) =>
+        rows.filter(
+          (row) => row.hour.getTime() < now.getTime() - 3 * dayMs - hourMs,
+        );
+      expect(untouched(await statsRows())).toEqual(untouched(before));
+      expect(
+        await maintenance.reconcileHourlyStats(new Date(), [workspaceId]),
+      ).toMatchObject({ corrected: 0, added: 0 });
+    });
+
+    it("fill in hours that have no totals yet, and can run twice", async () => {
+      const complete = await statsRows();
+      await db
+        .delete(schema.messageHourlyStats)
+        .where(eq(schema.messageHourlyStats.workspaceId, workspaceId));
+      const lateAt = new Date(now.getTime() - 45 * dayMs);
+      await insertMessage(lateAt, { status: "delivered" });
+      const late = await insertMessage(lateAt);
+      await dispatch.recordEvent({ messageId: late, type: "sent" });
+      const partial = await statsRows();
+      expect(partial).toHaveLength(1);
+      expect(partial[0]).toMatchObject({ sent: 2, delivered: 1 });
+
+      const saved: { workspaceId: string; from: string }[] = [];
+      await maintenance.backfillHourlyStats(
+        null,
+        async (cursor) => {
+          saved.push(cursor);
+        },
+        new Date(),
+      );
+      const filled = await statsRows();
+      expect(filled.length).toBeGreaterThanOrEqual(complete.length + 1);
+      await expectSameTotals();
+      const mine = saved.filter((cursor) => cursor.workspaceId === workspaceId);
+      expect(mine.length).toBeGreaterThan(10);
+
+      const resumeFrom = mine[Math.floor(mine.length / 2)];
+      await db
+        .delete(schema.messageHourlyStats)
+        .where(eq(schema.messageHourlyStats.workspaceId, workspaceId));
+      await maintenance.backfillHourlyStats(resumeFrom ?? null);
+      const resumed = await statsRows();
+      expect(resumed.length).toBeGreaterThan(0);
+      expect(resumed.length).toBeLessThan(filled.length);
+      expect(
+        resumed.every(
+          (row) =>
+            row.hour.getTime() >=
+            new Date(resumeFrom?.from ?? 0).getTime() - dayMs,
+        ),
+      ).toBe(true);
+
+      await maintenance.backfillHourlyStats();
+      expect(await statsRows()).toEqual(filled);
+      await maintenance.backfillHourlyStats();
+      expect(await statsRows()).toEqual(filled);
+      expect(
+        await repository.reconcileHourlyStats(workspaceId, everything()),
+      ).toEqual({ corrected: 0, added: 0 });
+    }, 120_000);
+
+    it("are dropped with the message partitions they describe", async () => {
+      const old = new Date(Date.UTC(new Date().getUTCFullYear() - 2, 0, 15, 9));
+      await db.insert(schema.messageHourlyStats).values({
+        workspaceId,
+        hour: old,
+        kind: "campaign",
+        trackOpens: false,
+        sent: 4,
+      });
+      const kept = (await statsRows()).length - 1;
+      const result = await maintenance.maintainPartitions();
+      expect(result.hourlyStats).toBeGreaterThanOrEqual(1);
+      const rows = await statsRows();
+      expect(rows).toHaveLength(kept);
+      expect(rows.some((row) => row.hour.getTime() === old.getTime())).toBe(
+        false,
+      );
+    });
+  });
+
+  describe("idempotency key retention", () => {
+    const stamp = randomUUID();
+    const now = new Date();
+
+    async function addKey(key: string, ageMs: number) {
+      await db.insert(schema.messageIdempotencyKeys).values({
+        workspaceId: other.workspaceId,
+        key,
+        requestHash: "hash",
+        messageId: uuidv7(),
+        messageCreatedAt: now,
+        createdAt: new Date(now.getTime() - ageMs),
+      });
+    }
+
+    async function storedKeys() {
+      const rows = await db
+        .select({ key: schema.messageIdempotencyKeys.key })
+        .from(schema.messageIdempotencyKeys)
+        .where(
+          eq(schema.messageIdempotencyKeys.workspaceId, other.workspaceId),
+        );
+      return rows
+        .map((row) => row.key)
+        .filter((key) => key.includes(stamp))
+        .sort();
+    }
+
+    it("keeps campaign and sequence keys for 30 days and the rest for 24 hours", async () => {
+      await addKey(`campaign:${stamp}:day`, 25 * hourMs);
+      await addKey(`campaign:${stamp}:month`, 30 * dayMs - hourMs);
+      await addKey(`campaign:${stamp}:expired`, 30 * dayMs + hourMs);
+      await addKey(`seq:${stamp}:day`, 25 * hourMs);
+      await addKey(`seq:${stamp}:month`, 30 * dayMs - hourMs);
+      await addKey(`seq:${stamp}:expired`, 30 * dayMs + hourMs);
+      await addKey(`order-${stamp}:fresh`, 23 * hourMs);
+      await addKey(`order-${stamp}:day`, 25 * hourMs);
+      await addKey(`order-${stamp}:expired`, 30 * dayMs + hourMs);
+      await addKey(`sequence-${stamp}:day`, 25 * hourMs);
+
+      const result = await maintenance.pruneIdempotencyKeys(now);
+      expect(result.removed).toBeGreaterThanOrEqual(5);
+      expect(await storedKeys()).toEqual(
+        [
+          `campaign:${stamp}:day`,
+          `campaign:${stamp}:month`,
+          `seq:${stamp}:day`,
+          `seq:${stamp}:month`,
+          `order-${stamp}:fresh`,
+        ].sort(),
+      );
+    });
+
+    it("removes expired keys in batches, past keys it has to keep", async () => {
+      const createdAt = new Date(now.getTime() - 26 * hourMs);
+      const row = (key: string) => ({
+        workspaceId: other.workspaceId,
+        key,
+        requestHash: "hash",
+        messageId: uuidv7(),
+        messageCreatedAt: now,
+        createdAt,
+      });
+      const kept = Array.from({ length: 1500 }, (_, index) =>
+        row(`campaign:${stamp}:batch:${index}`),
+      );
+      const expired = Array.from({ length: 2500 }, (_, index) =>
+        row(`order-${stamp}:batch:${index}`),
+      );
+      const rows = kept.flatMap((item, index) => [
+        item,
+        ...expired.slice(
+          Math.floor((index * 5) / 3),
+          Math.floor(((index + 1) * 5) / 3),
+        ),
+      ]);
+      for (let index = 0; index < rows.length; index += 1000) {
+        await db
+          .insert(schema.messageIdempotencyKeys)
+          .values(rows.slice(index, index + 1000));
+      }
+      const before = await storedKeys();
+      const result = await maintenance.pruneIdempotencyKeys(now);
+      expect(result.removed).toBeGreaterThanOrEqual(2500);
+      const after = await storedKeys();
+      expect(after).toHaveLength(before.length - 2500);
+      expect(after.some((key) => key.startsWith(`order-${stamp}:batch`))).toBe(
+        false,
+      );
+      expect(
+        after.filter((key) => key.startsWith(`campaign:${stamp}:batch`)),
+      ).toHaveLength(1500);
+    });
   });
 });

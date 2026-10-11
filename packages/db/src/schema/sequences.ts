@@ -38,6 +38,7 @@ export const sequences = pgTable(
     status: text("status").default("draft").notNull(),
     sourceIds: uuid("source_ids").array().default(sql`'{}'::uuid[]`).notNull(),
     fromName: text("from_name"),
+    fromEmail: text("from_email"),
     trackOpens: boolean("track_opens").default(false).notNull(),
     trackClicks: boolean("track_clicks").default(false).notNull(),
     stopOnReply: boolean("stop_on_reply").default(true).notNull(),

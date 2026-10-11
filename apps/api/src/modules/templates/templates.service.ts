@@ -380,6 +380,7 @@ export class TemplatesService {
       "brand.address": brand.postalAddress,
       "brand.website": brand.websiteUrl,
       unsubscribe_url: "#",
+      preferences_url: "#",
     };
     const renderedSubject = renderMergeTags(subject, values)
       .replace(/\s+/g, " ")

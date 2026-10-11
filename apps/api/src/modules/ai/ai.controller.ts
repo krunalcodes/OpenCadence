@@ -170,6 +170,42 @@ export class AiController {
     return sendText(reply, chunks);
   }
 
+  @Post("sequence")
+  @HttpCode(200)
+  @WorkspaceAuth("session")
+  @ApiProduces("text/plain")
+  @ApiOperation({
+    summary: "Draft a whole outreach sequence",
+    description:
+      "Streams plain text: a name tag, then one step tag per email. Each step has a wait_days attribute and a body tag holding an HTML fragment. Only the first step has a subject tag, because later steps go out as replies in the same thread. An error after the stream has started ends it with an error tag holding the code.",
+  })
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["prompt"],
+      properties: {
+        prompt: { type: "string", maxLength: 4000 },
+        audience: { type: "string", maxLength: 500 },
+        goal: { type: "string", maxLength: 300 },
+        steps: { type: "integer", minimum: 2, maximum: 6, default: 4 },
+        tone: { type: "string", maxLength: 100 },
+        mergeTags: { type: "array", maxItems: 50, items: { type: "string" } },
+      },
+    },
+  })
+  async sequence(
+    @CurrentWorkspace() workspace: WorkspaceAuthContext,
+    @Body() input: unknown,
+    @Res() reply: StreamReply,
+  ) {
+    const chunks = await this.ai.sequence(
+      workspace.workspaceId,
+      body(input),
+      disconnectSignal(reply),
+    );
+    return sendText(reply, chunks);
+  }
+
   @Post("rewrite")
   @HttpCode(200)
   @WorkspaceAuth("session")

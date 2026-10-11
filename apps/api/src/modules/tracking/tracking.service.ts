@@ -115,6 +115,12 @@ export class TrackingService {
       : `${this.appUrl}/unsubscribe/${token}`;
   }
 
+  preferencesPage(token: string) {
+    return this.readToken(token) === null
+      ? null
+      : `${this.appUrl}/preferences/${token}`;
+  }
+
   async recordOpen(token: string, visitor: Visitor) {
     const messageId = this.readToken(token);
     if (messageId !== null) {

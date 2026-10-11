@@ -63,6 +63,7 @@ export type Sequence = SequenceSummary & {
   steps: Step[];
   sources: SequenceSource[];
   fromName: string | null;
+  fromEmail: string | null;
   trackOpens: boolean;
   trackClicks: boolean;
   stopOnReply: boolean;
@@ -104,6 +105,7 @@ export type SequenceSettings = {
   name: string;
   sourceIds: string[];
   fromName: string | null;
+  fromEmail: string | null;
   trackOpens: boolean;
   trackClicks: boolean;
   stopOnReply: boolean;
@@ -125,6 +127,7 @@ export const sequencePageSize = 30;
 export const maxSearchLength = 200;
 export const maxNameLength = 120;
 export const maxFromNameLength = 120;
+export const maxFromEmailLength = 254;
 export const maxSubjectLength = 998;
 export const maxSteps = 20;
 export const maxDailyLimit = 10000;
@@ -298,6 +301,7 @@ export function toSequence(value: unknown): Sequence | null {
       return source ? [source] : [];
     }),
     fromName: textOrNull(value.fromName),
+    fromEmail: textOrNull(value.fromEmail),
     trackOpens: value.trackOpens === true,
     trackClicks: value.trackClicks === true,
     stopOnReply: value.stopOnReply !== false,
@@ -390,4 +394,10 @@ export type SequenceTab = (typeof sequenceTabs)[number];
 
 export function toTab(value: string | null): SequenceTab {
   return sequenceTabs.find((tab) => tab === value) ?? "steps";
+}
+
+const emailPattern = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:".]{2,}$/;
+
+export function isEmail(value: string) {
+  return value.length <= maxFromEmailLength && emailPattern.test(value);
 }

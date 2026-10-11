@@ -389,8 +389,6 @@ export const copy = {
     } satisfies Record<SchedulePreset, string>,
     date: "Date",
     time: "Time",
-    zone: (zone: string, id: string) =>
-      id ? `Your time zone: ${zone} (${id})` : `Your time zone: ${zone}`,
     missing: "Choose both a date and a time.",
     past: (minutes: number) =>
       `Choose a time at least ${minutes} minutes from now.`,

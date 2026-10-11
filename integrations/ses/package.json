@@ -1,0 +1,30 @@
+{
+  "name": "@workspace/integration-ses",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.1149.0",
+    "@workspace/integration-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.1",
+    "@workspace/typescript-config": "workspace:*",
+    "tsdown": "^0.23.1",
+    "typescript": "7.0.2",
+    "vitest": "^4.1.2"
+  }
+}

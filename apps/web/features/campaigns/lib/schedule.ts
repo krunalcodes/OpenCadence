@@ -9,46 +9,6 @@ export const minimumLeadMinutes = 2;
 const stableLocale = "en-US";
 const stableZone = "UTC";
 
-function pad(value: number) {
-  return String(value).padStart(2, "0");
-}
-
-export function localInputs(date: Date) {
-  return {
-    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-    time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
-  };
-}
-
-export function fromLocalInputs(date: string, time: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
-    return null;
-  }
-  const [year, month, day] = date.split("-").map(Number);
-  const [hours, minutes] = time.split(":").map(Number);
-  if (
-    year === undefined ||
-    month === undefined ||
-    day === undefined ||
-    hours === undefined ||
-    minutes === undefined
-  ) {
-    return null;
-  }
-  const result = new Date(year, month - 1, day, hours, minutes, 0, 0);
-  if (
-    Number.isNaN(result.getTime()) ||
-    result.getFullYear() !== year ||
-    result.getMonth() !== month - 1 ||
-    result.getDate() !== day ||
-    result.getHours() !== hours ||
-    result.getMinutes() !== minutes
-  ) {
-    return null;
-  }
-  return result;
-}
-
 export function presetDate(preset: SchedulePreset, now: Date) {
   const result = new Date(now);
   result.setSeconds(0, 0);
@@ -113,12 +73,4 @@ export function zoneName(date: Date, mode: DateMode) {
     return `${name}, ${offset}`;
   }
   return name || offset || stableZone;
-}
-
-export function zoneId() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-  } catch {
-    return "";
-  }
 }

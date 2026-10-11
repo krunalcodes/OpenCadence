@@ -27,12 +27,12 @@ import {
   SEQUENCE_OUTCOMES_QUEUE,
 } from "../src/modules/dispatch/dispatch.constants";
 import { DispatchService } from "../src/modules/dispatch/dispatch.service";
+import { MailPoller } from "../src/modules/inbox/mail-poller";
 import { AdapterRegistry } from "../src/modules/integrations/adapter-registry";
 import { SendingSourcesService } from "../src/modules/integrations/sending-sources.service";
 import { EnrollmentsService } from "../src/modules/sequences/enrollments.service";
 import { SequenceEnrollProcessor } from "../src/modules/sequences/jobs/sequence-enroll.processor";
 import { SequenceOutcomesProcessor } from "../src/modules/sequences/jobs/sequence-outcomes.processor";
-import { ReplyDetector } from "../src/modules/sequences/reply-detector";
 import { SequenceOutcomes } from "../src/modules/sequences/sequence-outcomes";
 import {
   SequenceRunner,
@@ -51,6 +51,7 @@ import {
 import { SequencesRepository } from "../src/modules/sequences/sequences.repository";
 import { SuppressionService } from "../src/modules/suppression/suppression.service";
 import {
+  createApiKey,
   createWorkspaceSessions,
   type TestWorkspace,
 } from "./support/workspace-session";
@@ -100,6 +101,7 @@ type SequenceBody = {
     stats: Record<string, number>;
   }[];
   sources: { id: string; hasInbox: boolean; email: string | null }[];
+  fromEmail: string | null;
   timezone: string;
   layout: Record<string, { x: number; y: number }> | null;
 };
@@ -108,7 +110,16 @@ type Problem = {
   severity: string;
   field: string;
   code: string;
+  message: string;
   stepId?: string;
+};
+
+type TemplateBody = {
+  id: string;
+  name: string;
+  subject: string;
+  html: string;
+  text: string;
 };
 
 function usernameOf(credentials: Credentials) {
@@ -210,7 +221,7 @@ describe("Sequences (e2e)", () => {
   let suppression: SuppressionService;
   let runner: SequenceRunner;
   let outcomes: SequenceOutcomes;
-  let detector: ReplyDetector;
+  let detector: MailPoller;
   let enrollments: EnrollmentsService;
   let repository: SequencesRepository;
   let sessions: ReturnType<typeof createWorkspaceSessions>;
@@ -508,7 +519,7 @@ describe("Sequences (e2e)", () => {
     suppression = app.get(SuppressionService);
     runner = app.get(SequenceRunner);
     outcomes = app.get(SequenceOutcomes);
-    detector = app.get(ReplyDetector);
+    detector = app.get(MailPoller);
     enrollments = app.get(EnrollmentsService);
     repository = app.get(SequencesRepository);
 
@@ -598,6 +609,7 @@ describe("Sequences (e2e)", () => {
         steps: [],
         sources: [],
         fromName: null,
+        fromEmail: null,
         trackOpens: false,
         trackClicks: false,
         stopOnReply: true,
@@ -637,6 +649,8 @@ describe("Sequences (e2e)", () => {
         [{ sourceIds: ["nope"] }, "sourceIds"],
         [{ layout: { a: { x: "1", y: 2 } } }, "layout"],
         [{ name: "" }, "name"],
+        [{ fromEmail: "not an address" }, "fromEmail"],
+        [{ fromEmail: 5 }, "fromEmail"],
       ] as const) {
         const response = await http(
           "PATCH",
@@ -657,6 +671,7 @@ describe("Sequences (e2e)", () => {
         {
           sourceIds: [grace, ada],
           fromName: "Ada at Northwind",
+          fromEmail: " Hello@Northwind.TEST ",
           timezone: "Europe/Berlin",
           sendDays: [5, 1, 1],
           windowStartMinute: 480,
@@ -670,6 +685,7 @@ describe("Sequences (e2e)", () => {
       expect(updated.status).toBe(200);
       expect(updated.body).toMatchObject({
         fromName: "Ada at Northwind",
+        fromEmail: "hello@northwind.test",
         timezone: "Europe/Berlin",
         sendDays: [1, 5],
         windowStartMinute: 480,
@@ -922,6 +938,7 @@ describe("Sequences (e2e)", () => {
         timezone: "Europe/Berlin",
         layout: null,
         fromName: "Ada at Northwind",
+        fromEmail: "hello@northwind.test",
       });
       expect(copy.body.stats.enrolled).toBe(0);
       expect(copy.body.steps.map((step) => step.subject)).toEqual([
@@ -935,6 +952,471 @@ describe("Sequences (e2e)", () => {
         `/v1/sequences/${sequenceId}/duplicate`,
       );
       expect(again.body.name).toBe("Founders outreach copy 2");
+    });
+  });
+
+  describe("from a draft", () => {
+    const name = `Drafted outreach ${randomUUID().slice(0, 8)}`;
+    let created: SequenceBody;
+
+    function templatesNamed(search: string, workspace: TestWorkspace = alpha) {
+      return http<{ items: { id: string; name: string }[] }>(
+        "GET",
+        `/v1/templates?search=${encodeURIComponent(search)}&limit=100`,
+        undefined,
+        workspace,
+      );
+    }
+
+    async function templateOf(id: string | undefined) {
+      const response = await http<TemplateBody>("GET", `/v1/templates/${id}`);
+      expect(response.status).toBe(200);
+      return response.body;
+    }
+
+    it("creates one template per step and a draft sequence with the steps in order", async () => {
+      const response = await http<SequenceBody>(
+        "POST",
+        "/v1/sequences/from-draft",
+        {
+          name: `  ${name}  `,
+          steps: [
+            {
+              waitMinutes: 0,
+              subject: "  A question about {{ company | your team }} ",
+              html: '<p>Hi {{ first_name | there }},</p>\n<p>Read <a href="https://northwind.test/guide">our guide</a> first.</p>\n<ul>\n<li>Faster setup</li>\n<li>Fewer bounces</li>\n</ul>\n<p>Best,<br>[your name]</p>',
+            },
+            { waitMinutes: 3 * 24 * 60, html: "<p>One more thought.</p>" },
+            {
+              waitMinutes: 5 * 24 * 60,
+              subject: "A different angle",
+              threadMode: "new",
+              html: "<p>A fresh thread.</p>",
+            },
+            {
+              waitMinutes: 7 * 24 * 60,
+              html: "<p>This is my last note.</p>",
+            },
+          ],
+        },
+      );
+      expect(response.status).toBe(201);
+      created = response.body;
+      expect(created).toMatchObject({
+        name,
+        status: "draft",
+        stepCount: 4,
+        sources: [],
+        fromEmail: null,
+        layout: null,
+      });
+      expect(
+        created.steps.map((step) => [
+          step.position,
+          step.delayMinutes,
+          step.threadMode,
+          step.subject,
+          step.template?.name,
+        ]),
+      ).toEqual([
+        [
+          0,
+          0,
+          "new",
+          "A question about {{ company | your team }}",
+          `${name}: step 1`,
+        ],
+        [
+          1,
+          4320,
+          "reply",
+          "A question about {{ company | your team }}",
+          `${name}: step 2`,
+        ],
+        [2, 7200, "new", "A different angle", `${name}: step 3`],
+        [3, 10080, "reply", "A different angle", `${name}: step 4`],
+      ]);
+
+      const first = await templateOf(created.steps[0]?.template?.id);
+      expect(first).toMatchObject({
+        name: `${name}: step 1`,
+        subject: "A question about {{ company | your team }}",
+        html: '<p>Hi {{ first_name | there }},</p>\n<p>Read <a href="https://northwind.test/guide">our guide</a> first.</p>\n<ul>\n<li>Faster setup</li>\n<li>Fewer bounces</li>\n</ul>\n<p>Best,<br>[your name]</p>',
+        text: "Hi {{ first_name | there }},\n\nRead our guide (https://northwind.test/guide) first.\n\n- Faster setup\n- Fewer bounces\n\nBest,\n[your name]",
+      });
+      const second = await templateOf(created.steps[1]?.template?.id);
+      expect(second.subject).toBe("A question about {{ company | your team }}");
+      expect(second.text).toBe("One more thought.");
+
+      const rows = await db
+        .select()
+        .from(sequenceSteps)
+        .where(eq(sequenceSteps.sequenceId, created.id))
+        .orderBy(asc(sequenceSteps.position));
+      expect(rows.every((row) => row.snapshotId)).toBe(true);
+      const snapshot = await dispatch.getSnapshot(
+        alpha.workspaceId,
+        rows[0]?.snapshotId ?? "",
+      );
+      expect(snapshot).toMatchObject({
+        subject: "A question about {{ company | your team }}",
+        html: first.html,
+        text: first.text,
+      });
+
+      const check = await http<{ problems: Problem[] }>(
+        "GET",
+        `/v1/sequences/${created.id}/check`,
+      );
+      expect(
+        check.body.problems.filter((problem) => problem.field === "steps"),
+      ).toEqual([]);
+    });
+
+    it("removes unsafe markup before saving and derives the text from what is left", async () => {
+      const response = await http<SequenceBody>(
+        "POST",
+        "/v1/sequences/from-draft",
+        {
+          name: `Unsafe draft ${randomUUID().slice(0, 8)}`,
+          steps: [
+            {
+              waitMinutes: 0,
+              subject: "Hello",
+              html: '<style>p{color:red}</style><h1 style="color:red">Title</h1><p onclick="steal()">Hi <b>there</b></p><script>alert(1)</script><a href="javascript:alert(1)">Bad link</a><a href="data:text/html,x">Data link</a><img src="https://x.test/a.png" onerror="steal()"><a href="https://northwind.test" onmouseover="steal()" data-button="true">Good link</a>',
+            },
+          ],
+        },
+      );
+      expect(response.status).toBe(201);
+      const template = await templateOf(response.body.steps[0]?.template?.id);
+      expect(template.html).toBe(
+        '<p>Title</p><p>Hi <strong>there</strong></p>Bad linkData link<a href="https://northwind.test">Good link</a>',
+      );
+      expect(template.text).toBe(
+        "Title\n\nHi there\n\nBad linkData linkGood link (https://northwind.test)",
+      );
+    });
+
+    it("answers 409 for a taken name without creating templates", async () => {
+      const before = await templatesNamed(name);
+      const taken = await http("POST", "/v1/sequences/from-draft", {
+        name: name.toUpperCase(),
+        steps: [{ waitMinutes: 0, subject: "Hi", html: "<p>Hi</p>" }],
+      });
+      expect(taken.status).toBe(409);
+      expect(taken.body).toMatchObject({ code: "name_taken", field: "name" });
+      const after = await templatesNamed(name);
+      expect(after.body.items).toHaveLength(before.body.items.length);
+      expect(after.body.items).toHaveLength(4);
+    });
+
+    it("gives a step template another name when its name is taken", async () => {
+      const fresh = `Reused names ${randomUUID().slice(0, 8)}`;
+      const existing = await http("POST", "/v1/templates", {
+        name: `${fresh}: step 1`,
+        subject: "Mine",
+        html: "<p>Mine</p>",
+      });
+      expect(existing.status).toBe(201);
+      const response = await http<SequenceBody>(
+        "POST",
+        "/v1/sequences/from-draft",
+        {
+          name: fresh,
+          steps: [
+            { waitMinutes: 0, subject: "Hi", html: "<p>Hi</p>" },
+            { waitMinutes: 60, html: "<p>Again</p>" },
+          ],
+        },
+      );
+      expect(response.status).toBe(201);
+      expect(response.body.steps.map((step) => step.template?.name)).toEqual([
+        `${fresh}: step 1 (2)`,
+        `${fresh}: step 2`,
+      ]);
+
+      const long = `${"L".repeat(111)} ${randomUUID().slice(0, 8)}`;
+      const longNamed = await http<SequenceBody>(
+        "POST",
+        "/v1/sequences/from-draft",
+        {
+          name: long,
+          steps: [{ waitMinutes: 0, subject: "Hi", html: "<p>Hi</p>" }],
+        },
+      );
+      expect(longNamed.status).toBe(201);
+      expect(longNamed.body.name).toBe(long);
+      expect(longNamed.body.steps[0]?.template?.name).toBe(
+        `${"L".repeat(111)}: step 1`,
+      );
+    });
+
+    it("leaves nothing behind when it fails part way", async () => {
+      const doomed = `Doomed draft ${randomUUID().slice(0, 8)}`;
+      const payload = {
+        name: doomed,
+        steps: [
+          { waitMinutes: 0, subject: "Hi", html: "<p>Hi</p>" },
+          { waitMinutes: 60, html: "<p>Again</p>" },
+          { waitMinutes: 60, html: "<p>Last</p>" },
+        ],
+      };
+      const real = dispatch.createSnapshot.bind(dispatch);
+      let calls = 0;
+      const snapshots = vi
+        .spyOn(dispatch, "createSnapshot")
+        .mockImplementation(async (...args) => {
+          calls += 1;
+          if (calls === 3) {
+            throw new Error("The snapshot store is down.");
+          }
+          return real(...args);
+        });
+      const failed = await http("POST", "/v1/sequences/from-draft", payload);
+      snapshots.mockRestore();
+      expect(failed.status).toBe(500);
+      expect(calls).toBe(3);
+      expect((await templatesNamed(doomed)).body.items).toEqual([]);
+      const list = await http<{ items: unknown[] }>(
+        "GET",
+        `/v1/sequences?search=${encodeURIComponent(doomed)}`,
+      );
+      expect(list.body.items).toEqual([]);
+
+      const insert = vi
+        .spyOn(repository, "insertSequence")
+        .mockResolvedValueOnce({ ok: false, reason: "name_taken" });
+      const raced = await http("POST", "/v1/sequences/from-draft", payload);
+      insert.mockRestore();
+      expect(raced.status).toBe(409);
+      expect(raced.body.code).toBe("name_taken");
+      expect((await templatesNamed(doomed)).body.items).toEqual([]);
+
+      const retried = await http<SequenceBody>(
+        "POST",
+        "/v1/sequences/from-draft",
+        payload,
+      );
+      expect(retried.status).toBe(201);
+      expect(retried.body.steps.map((step) => step.template?.name)).toEqual([
+        `${doomed}: step 1`,
+        `${doomed}: step 2`,
+        `${doomed}: step 3`,
+      ]);
+    });
+
+    it("names the field in validation errors and creates nothing", async () => {
+      const invalid = `Invalid draft ${randomUUID().slice(0, 8)}`;
+      const good = { waitMinutes: 0, subject: "Hi", html: "<p>Hi</p>" };
+      const later = { waitMinutes: 60, html: "<p>Again</p>" };
+      for (const [payload, field] of [
+        [{ steps: [good] }, "name"],
+        [{ name: "x".repeat(121), steps: [good] }, "name"],
+        [{ name: invalid }, "steps"],
+        [{ name: invalid, steps: [] }, "steps"],
+        [{ name: invalid, steps: [good, ...Array(10).fill(later)] }, "steps"],
+        [
+          { name: invalid, steps: [{ ...good, waitMinutes: -1 }] },
+          "steps.0.waitMinutes",
+        ],
+        [
+          { name: invalid, steps: [good, { ...later, waitMinutes: 0 }] },
+          "steps.1.waitMinutes",
+        ],
+        [
+          { name: invalid, steps: [good, { ...later, waitMinutes: 1.5 }] },
+          "steps.1.waitMinutes",
+        ],
+        [
+          { name: invalid, steps: [{ ...good, subject: "a\nb" }] },
+          "steps.0.subject",
+        ],
+        [
+          { name: invalid, steps: [{ ...good, threadMode: "thread" }] },
+          "steps.0.threadMode",
+        ],
+        [
+          { name: invalid, steps: [good, later, { waitMinutes: 60 }] },
+          "steps.2.html",
+        ],
+        [
+          { name: invalid, steps: [good, later, { ...later, html: "  " }] },
+          "steps.2.html",
+        ],
+        [
+          {
+            name: invalid,
+            steps: [good, later, { ...later, html: "<script>x</script>" }],
+          },
+          "steps.2.html",
+        ],
+        [
+          {
+            name: invalid,
+            steps: [good, { ...later, html: "x".repeat(100_001) }],
+          },
+          "steps.1.html",
+        ],
+      ] as const) {
+        const response = await http(
+          "POST",
+          "/v1/sequences/from-draft",
+          payload,
+        );
+        expect(response.status).toBe(400);
+        expect(response.body).toMatchObject({ code: "validation", field });
+      }
+      expect((await templatesNamed(invalid)).body.items).toEqual([]);
+    });
+
+    it("keeps a drafted sequence inside its workspace, for a session and for an API key", async () => {
+      const unauthenticated = await app.inject({
+        method: "POST",
+        url: "/v1/sequences/from-draft",
+        payload: { name: "No session", steps: [] },
+      });
+      expect(unauthenticated.statusCode).toBe(401);
+
+      const hidden = await http(
+        "GET",
+        `/v1/sequences/${created.id}`,
+        undefined,
+        beta,
+      );
+      expect(hidden.status).toBe(404);
+
+      const key = await createApiKey(app, beta.owner, beta.workspaceId);
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/sequences/from-draft",
+        headers: { "x-api-key": key },
+        payload: {
+          name,
+          steps: [{ waitMinutes: 0, subject: "Hi", html: "<p>Hi</p>" }],
+        },
+      });
+      expect(response.statusCode).toBe(201);
+      const theirs = response.json() as SequenceBody;
+      expect(theirs.name).toBe(name);
+      expect(theirs.steps[0]?.template?.name).toBe(`${name}: step 1`);
+      expect(theirs.steps[0]?.template?.id).not.toBe(
+        created.steps[0]?.template?.id,
+      );
+      const [row] = await db
+        .select({ workspaceId: schema.templates.workspaceId })
+        .from(schema.templates)
+        .where(eq(schema.templates.id, theirs.steps[0]?.template?.id ?? ""));
+      expect(row?.workspaceId).toBe(beta.workspaceId);
+      expect((await templatesNamed(name, beta)).body.items).toHaveLength(1);
+      expect((await templatesNamed(name)).body.items).toHaveLength(4);
+      expect((await http("GET", `/v1/sequences/${theirs.id}`)).status).toBe(
+        404,
+      );
+    });
+  });
+
+  describe("the from address", () => {
+    it("lets a source without a fixed address send as the sequence's from address", async () => {
+      const blocked = await makeSequence(
+        { sourceIds: [resend] },
+        undefined,
+        false,
+      );
+      const before = await http<{ ready: boolean; problems: Problem[] }>(
+        "GET",
+        `/v1/sequences/${blocked.id}/check`,
+      );
+      const problem = before.body.problems.find(
+        (item) => item.code === "source_without_address",
+      );
+      expect(problem).toMatchObject({ severity: "error", field: "sources" });
+      expect(problem?.message).toContain(
+        "Set a from address in the sequence settings",
+      );
+      expect(before.body.ready).toBe(false);
+      expect(
+        (await http("POST", `/v1/sequences/${blocked.id}/activate`)).status,
+      ).toBe(409);
+
+      const patched = await http<SequenceBody>(
+        "PATCH",
+        `/v1/sequences/${blocked.id}`,
+        { fromEmail: "Outreach@Northwind.Test", fromName: "Northwind" },
+      );
+      expect(patched.status).toBe(200);
+      expect(patched.body.fromEmail).toBe("outreach@northwind.test");
+      const after = await http<{ ready: boolean; problems: Problem[] }>(
+        "GET",
+        `/v1/sequences/${blocked.id}/check`,
+      );
+      expect(after.body.ready).toBe(true);
+      expect(after.body.problems.map((item) => item.code)).not.toContain(
+        "source_without_address",
+      );
+      const active = await http<SequenceBody>(
+        "POST",
+        `/v1/sequences/${blocked.id}/activate`,
+      );
+      expect(active.status).toBe(200);
+
+      await redis.del(spacingKey(resend));
+      const [person] = await makeContacts(1);
+      await enrol(blocked.id, [person?.id ?? ""]);
+      const tick = await runner.tick(clockNow, scope);
+      expect(tick).toMatchObject({ claimed: 1, sent: 1 });
+      const [message] = await messagesOf(blocked.id);
+      expect(message).toMatchObject({
+        kind: "sequence",
+        status: "queued",
+        sourceId: resend,
+        fromEmail: "outreach@northwind.test",
+        fromName: "Northwind",
+        toEmails: [person?.email],
+      });
+      expect(message?.rfcMessageId).toBe(`<${message?.id}@northwind.test>`);
+      expect(sendJobs).toContain(message?.id);
+    });
+
+    it("keeps a mailbox on its own address and waits when the from address is cleared", async () => {
+      const mixed = await makeSequence({
+        sourceIds: [ada],
+        fromEmail: "outreach@northwind.test",
+      });
+      const [person] = await makeContacts(1);
+      await enrol(mixed.id, [person?.id ?? ""]);
+      expect(await runner.tick(clockNow, scope)).toMatchObject({ sent: 1 });
+      const [fromMailbox] = await messagesOf(mixed.id);
+      expect(fromMailbox).toMatchObject({
+        sourceId: ada,
+        fromEmail: "ada@alpha.test",
+      });
+
+      const provider = await makeSequence({
+        sourceIds: [resend],
+        fromEmail: "outreach@northwind.test",
+      });
+      const cleared = await http<SequenceBody>(
+        "PATCH",
+        `/v1/sequences/${provider.id}`,
+        { fromEmail: "" },
+      );
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.fromEmail).toBeNull();
+      expect((await sequenceRow(provider.id)).fromEmail).toBeNull();
+      await redis.del(spacingKey(resend));
+      const [waiting] = await makeContacts(1);
+      await enrol(provider.id, [waiting?.id ?? ""]);
+      expect(await runner.tick(clockNow, scope)).toMatchObject({
+        claimed: 1,
+        sent: 0,
+        rescheduled: 1,
+      });
+      expect(await messagesOf(provider.id)).toEqual([]);
+      const enrollment = await enrollmentOf(provider.id, waiting?.id ?? "");
+      expect(enrollment.nextRunAt?.toISOString()).toBe(
+        later(retryUnusableSourceMs).toISOString(),
+      );
     });
   });
 

@@ -5,7 +5,7 @@ export type IntegrationId =
   | "outlook"
   | "imap-smtp"
   | "resend"
-  | "amazon-ses"
+  | "ses"
   | "sendgrid"
   | "smtp";
 
@@ -82,7 +82,16 @@ export type Integration = {
   fields: ConnectField[];
   submitLabel: string;
   available: boolean;
+  signIn?: { provider: MailboxProvider; company: string };
 };
+
+export type MailboxProvider = "gmail" | "outlook";
+
+export const mailboxProviders: MailboxProvider[] = ["gmail", "outlook"];
+
+export function mailboxProviderOf(type: string): MailboxProvider | null {
+  return mailboxProviders.find((provider) => provider === type) ?? null;
+}
 
 const inboxFeatures: Feature[] = ["replies", "warmup"];
 const apiFeatures: Feature[] = ["volume", "events"];
@@ -126,22 +135,24 @@ export const integrations: Integration[] = [
     summary: "Google Workspace and personal Gmail mailboxes.",
     features: ["mailbox"],
     intro:
-      "You approve access on Google's own page. OpenCadence can then send as this mailbox. It never sees the password.",
+      "You approve access on Google's own page. OpenCadence can then send as this mailbox. It never sees the password and does not read the mailbox unless you turn on reply detection later.",
     fields: [dailyLimitField],
     submitLabel: "Continue to Google",
     available: true,
+    signIn: { provider: "gmail", company: "Google" },
   },
   {
     id: "outlook",
     name: "Outlook",
     mark: "O",
     summary: "Microsoft 365 and Outlook.com mailboxes.",
-    features: inboxFeatures,
+    features: ["mailbox"],
     intro:
-      "You approve access on Microsoft's own page. OpenCadence can then send as this mailbox and read its replies. It never sees the password.",
-    fields: [addressField, dailyLimitField],
+      "You approve access on Microsoft's own page. OpenCadence can then send as this mailbox. It never sees the password and does not read the mailbox unless you turn on reply detection later.",
+    fields: [dailyLimitField],
     submitLabel: "Continue to Microsoft",
-    available: false,
+    available: true,
+    signIn: { provider: "outlook", company: "Microsoft" },
   },
   {
     id: "imap-smtp",
@@ -264,13 +275,13 @@ export const integrations: Integration[] = [
     available: true,
   },
   {
-    id: "amazon-ses",
+    id: "ses",
     name: "Amazon SES",
     mark: "Se",
     summary: "Send through your own AWS account at Amazon SES rates.",
     features: apiFeatures,
     intro:
-      "Create an IAM user that is allowed to send with SES, then paste its access key here. Pick the region where your sending identities are verified.",
+      "Create an IAM user that is allowed to send with SES, then paste its access key here. Pick the region where your sending identities are verified. After connecting you get the steps for bounce and complaint events and the exact IAM policy.",
     fields: [
       labelField("Amazon SES", "Newsletter"),
       {
@@ -280,6 +291,7 @@ export const integrations: Integration[] = [
         placeholder: "AKIA",
         missing:
           "Paste the access key ID of the IAM user. It starts with AKIA.",
+        hint: "Use the long-lived key of an IAM user. Temporary keys that start with ASIA are not supported.",
         mono: true,
       },
       {
@@ -296,9 +308,20 @@ export const integrations: Integration[] = [
         hint: "The AWS region where your domains or addresses are verified.",
         missing: "Choose the AWS region you send from.",
       },
+      {
+        id: "configurationSet",
+        kind: "text",
+        label: "Configuration set",
+        placeholder: "opencadence",
+        hint: "Optional. Every send uses it, and bounce and complaint events are published through it. OpenCadence creates it during event setup if the key is allowed to.",
+        missing:
+          "Use up to 64 letters, numbers, hyphens, and underscores, or leave it empty.",
+        optional: true,
+        mono: true,
+      },
     ],
     submitLabel: "Test and connect",
-    available: false,
+    available: true,
   },
   {
     id: "sendgrid",
@@ -405,4 +428,18 @@ export const sesRegions: Option[] = [
   },
   { value: "ap-southeast-2", label: "Asia Pacific (Sydney), ap-southeast-2" },
   { value: "ap-northeast-1", label: "Asia Pacific (Tokyo), ap-northeast-1" },
+  { value: "us-west-1", label: "US West (N. California), us-west-1" },
+  { value: "eu-west-3", label: "Europe (Paris), eu-west-3" },
+  { value: "eu-south-1", label: "Europe (Milan), eu-south-1" },
+  { value: "eu-central-2", label: "Europe (Zurich), eu-central-2" },
+  { value: "il-central-1", label: "Israel (Tel Aviv), il-central-1" },
+  { value: "me-south-1", label: "Middle East (Bahrain), me-south-1" },
+  { value: "me-central-1", label: "Middle East (UAE), me-central-1" },
+  { value: "af-south-1", label: "Africa (Cape Town), af-south-1" },
+  { value: "ap-south-2", label: "Asia Pacific (Hyderabad), ap-south-2" },
+  { value: "ap-southeast-3", label: "Asia Pacific (Jakarta), ap-southeast-3" },
+  { value: "ap-northeast-2", label: "Asia Pacific (Seoul), ap-northeast-2" },
+  { value: "ap-northeast-3", label: "Asia Pacific (Osaka), ap-northeast-3" },
+  { value: "us-gov-east-1", label: "AWS GovCloud (US-East), us-gov-east-1" },
+  { value: "us-gov-west-1", label: "AWS GovCloud (US-West), us-gov-west-1" },
 ];

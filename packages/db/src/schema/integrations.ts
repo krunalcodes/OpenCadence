@@ -137,7 +137,7 @@ export const sendingSourceCredentials = pgTable(
       .where(sql`${table.accessTokenExpiresAt} is not null`),
     check(
       "sending_source_credentials_auth_type_check",
-      sql`${table.authType} in ('oauth2', 'api_key', 'password')`,
+      sql`${table.authType} in ('oauth2', 'api_key', 'password', 'access_key')`,
     ),
     check(
       "sending_source_credentials_secret_hint_check",

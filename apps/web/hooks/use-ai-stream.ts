@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { splitTrailer } from "@/features/templates/lib/ai";
-import { streamAi } from "@/features/templates/queries/client";
+import { splitTrailer, streamAi } from "@/lib/ai-stream";
 import { type ApiError, type Row, toApiError } from "@/lib/api";
 
 export type AiStreamStatus =
@@ -18,7 +17,7 @@ export type AiStream = {
 
 const idle: AiStream = { status: "idle", text: "", error: null };
 
-export function useAiStream(path: "/ai/draft" | "/ai/rewrite") {
+export function useAiStream(path: string) {
   const [stream, setStream] = useState<AiStream>(idle);
   const controller = useRef<AbortController | null>(null);
 

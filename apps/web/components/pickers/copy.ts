@@ -8,7 +8,7 @@ const providerNames: Record<string, string> = {
   outlook: "Outlook",
   "imap-smtp": "IMAP/SMTP",
   resend: "Resend",
-  "amazon-ses": "Amazon SES",
+  ses: "Amazon SES",
   sendgrid: "SendGrid",
   smtp: "SMTP relay",
 };
@@ -108,5 +108,45 @@ export const copy = {
       failed: "Could not count the recipients.",
       retry: "Try again",
     },
+  },
+  date: {
+    label: "Date",
+    placeholder: "Pick a date",
+    value: (label: string, date: string) => `${label}: ${date}`,
+    typeLabel: "Type a date",
+    typePlaceholder: (example: string) => `Type a date, for example ${example}`,
+    unreadable: (example: string) =>
+      `That is not a date. Type it like ${example}, or pick a day below.`,
+    tooEarly: (date: string) => `Choose ${date} or a later date.`,
+    tooLate: (date: string) => `Choose ${date} or an earlier date.`,
+    today: "Today",
+    clear: "Clear",
+    clearLabel: (label: string) => `Clear ${label}`,
+    calendar: {
+      navigation: "Change month",
+      previous: "Previous month",
+      next: "Next month",
+      month: "Month",
+      year: "Year",
+      day: (date: string, today: boolean, selected: boolean) =>
+        `${today ? "Today, " : ""}${date}${selected ? ", selected" : ""}`,
+    },
+  },
+  time: {
+    label: "Time",
+    placeholder: "Pick a time",
+    noMatch: "Type a time like 9:30 or 14:05.",
+    outOfRange: (earliest: string, latest: string) =>
+      `Choose a time from ${earliest} to ${latest}.`,
+    endOfDay: "End of day",
+  },
+  dateTime: {
+    label: "Date and time",
+    date: "Date",
+    time: "Time",
+    zone: (zone: string, id: string) =>
+      id ? `Your time zone: ${zone} (${id})` : `Your time zone: ${zone}`,
+    skipped:
+      "That time does not exist on this day because the clocks change. Choose another time.",
   },
 };

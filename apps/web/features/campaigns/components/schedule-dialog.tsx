@@ -8,14 +8,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog";
-import { Field, FieldLabel } from "@workspace/ui/components/field";
-import { Input } from "@workspace/ui/components/input";
 import { cn } from "@workspace/ui/lib/utils";
 import { useState } from "react";
+import { DateTimePicker } from "@/components/pickers/date-time-picker";
 import {
   dialogActionsClass,
   dialogTitleClass,
-  inputClass,
   primaryButtonClass,
   secondaryButtonClass,
 } from "@/components/product/styles";
@@ -28,14 +26,10 @@ import {
 import { copy } from "@/features/campaigns/lib/copy";
 import {
   exactMoment,
-  fromLocalInputs,
   isSchedulable,
-  localInputs,
   minimumLeadMinutes,
   presetDate,
   schedulePresets,
-  zoneId,
-  zoneName,
 } from "@/features/campaigns/lib/schedule";
 
 const text = copy.scheduleDialog;
@@ -99,22 +93,17 @@ function ScheduleForm({
   onConfirm,
   onCancel,
 }: ScheduleFormProps) {
-  const [initial] = useState(() =>
-    localInputs(presetDate("tomorrow", new Date())),
+  const [floor] = useState(() => new Date().toISOString());
+  const [value, setValue] = useState<string | null>(() =>
+    presetDate("tomorrow", new Date()).toISOString(),
   );
-  const [today] = useState(() => localInputs(new Date()).date);
-  const [date, setDate] = useState(initial.date);
-  const [time, setTime] = useState(initial.time);
   const [problem, setProblem] = useState<string | null>(null);
 
-  const chosen = fromLocalInputs(date, time);
+  const chosen = value ? new Date(value) : null;
   const moment = chosen ? exactMoment(chosen, "local") : null;
-  const zone = zoneName(chosen ?? new Date(), "local");
 
   function pick(next: Date) {
-    const values = localInputs(next);
-    setDate(values.date);
-    setTime(values.time);
+    setValue(next.toISOString());
     setProblem(null);
   }
 
@@ -167,64 +156,19 @@ function ScheduleForm({
             </Button>
           ))}
         </fieldset>
-        <div className="grid grid-cols-2 gap-3">
-          <Field data-invalid={problem ? true : undefined}>
-            <FieldLabel
-              htmlFor="campaign-schedule-date"
-              className="text-[13px]"
-            >
-              {text.date}
-            </FieldLabel>
-            <Input
-              id="campaign-schedule-date"
-              type="date"
-              required
-              min={today}
-              disabled={pending}
-              value={date}
-              onChange={(event) => {
-                setDate(event.target.value);
-                setProblem(null);
-              }}
-              aria-invalid={problem ? true : undefined}
-              aria-describedby="campaign-schedule-note"
-              className={cn(inputClass, "tabular-nums md:text-[13px]")}
-            />
-          </Field>
-          <Field data-invalid={problem ? true : undefined}>
-            <FieldLabel
-              htmlFor="campaign-schedule-time"
-              className="text-[13px]"
-            >
-              {text.time}
-            </FieldLabel>
-            <Input
-              id="campaign-schedule-time"
-              type="time"
-              required
-              step={300}
-              disabled={pending}
-              value={time}
-              onChange={(event) => {
-                setTime(event.target.value);
-                setProblem(null);
-              }}
-              aria-invalid={problem ? true : undefined}
-              aria-describedby="campaign-schedule-note"
-              className={cn(inputClass, "tabular-nums md:text-[13px]")}
-            />
-          </Field>
-        </div>
-        <p
-          id="campaign-schedule-note"
-          className={cn(
-            "text-[12.5px]",
-            problem ? "text-danger" : "text-ink-tertiary",
-          )}
-          role={problem ? "alert" : undefined}
-        >
-          {problem ?? text.zone(zone, zoneId())}
-        </p>
+        <DateTimePicker
+          id="campaign-schedule"
+          value={value}
+          min={floor}
+          disabled={pending}
+          error={problem}
+          dateLabel={text.date}
+          timeLabel={text.time}
+          onChange={(next) => {
+            setValue(next);
+            setProblem(null);
+          }}
+        />
 
         {moment ? (
           <p

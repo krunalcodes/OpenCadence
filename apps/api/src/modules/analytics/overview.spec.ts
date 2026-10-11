@@ -334,6 +334,7 @@ describe("overview alert", () => {
   it("is null when nothing is wrong", () => {
     expect(
       pickAlert({
+        failingDomains: [],
         sources: [healthy],
         failedCampaigns: [],
         totals: totals({ sent: 1000, bounced: 10 }),
@@ -341,8 +342,29 @@ describe("overview alert", () => {
     ).toBeNull();
   });
 
-  it("puts a source that needs attention first", () => {
+  it("puts a failing sending domain above everything else", () => {
+    expect(
+      pickAlert({
+        failingDomains: [
+          { id: "d1", name: "example.com" },
+          { id: "d2", name: "example.org" },
+        ],
+        sources: [healthy, paused, broken],
+        failedCampaigns: [failed],
+        totals: bouncing,
+      }),
+    ).toEqual({
+      code: "domain_failing",
+      entity: { type: "domain", id: "d1", name: "example.com" },
+      others: 1,
+      rate: null,
+      path: "domains",
+    });
+  });
+
+  it("puts a source that needs attention next", () => {
     const alert = pickAlert({
+      failingDomains: [],
       sources: [healthy, paused, broken],
       failedCampaigns: [failed],
       totals: bouncing,
@@ -359,6 +381,7 @@ describe("overview alert", () => {
   it("then a paused source, then a failed campaign", () => {
     expect(
       pickAlert({
+        failingDomains: [],
         sources: [healthy, paused],
         failedCampaigns: [failed],
         totals: bouncing,
@@ -366,6 +389,7 @@ describe("overview alert", () => {
     ).toBe("source_paused");
     expect(
       pickAlert({
+        failingDomains: [],
         sources: [healthy],
         failedCampaigns: [failed, { id: "c2", name: "Older" }],
         totals: bouncing,
@@ -381,10 +405,16 @@ describe("overview alert", () => {
 
   it("then the bounce rate, then the complaint rate", () => {
     expect(
-      pickAlert({ sources: [healthy], failedCampaigns: [], totals: bouncing }),
+      pickAlert({
+        failingDomains: [],
+        sources: [healthy],
+        failedCampaigns: [],
+        totals: bouncing,
+      }),
     ).toMatchObject({ code: "bounce_rate_high", rate: 0.03, entity: null });
     expect(
       pickAlert({
+        failingDomains: [],
         sources: [healthy],
         failedCampaigns: [],
         totals: totals({ sent: 1000, bounced: 10, complained: 5 }),
@@ -395,6 +425,7 @@ describe("overview alert", () => {
   it("needs enough sends before a rate counts", () => {
     expect(
       pickAlert({
+        failingDomains: [],
         sources: [],
         failedCampaigns: [],
         totals: totals({ sent: 49, bounced: 20 }),
@@ -402,6 +433,7 @@ describe("overview alert", () => {
     ).toBeNull();
     expect(
       pickAlert({
+        failingDomains: [],
         sources: [],
         failedCampaigns: [],
         totals: totals({ sent: 50, bounced: 1 }),
@@ -409,6 +441,7 @@ describe("overview alert", () => {
     ).toBeNull();
     expect(
       pickAlert({
+        failingDomains: [],
         sources: [],
         failedCampaigns: [],
         totals: totals({ sent: 499, bounced: 5, complained: 3 }),
@@ -416,6 +449,7 @@ describe("overview alert", () => {
     ).toBeNull();
     expect(
       pickAlert({
+        failingDomains: [],
         sources: [],
         failedCampaigns: [],
         totals: totals({ sent: 50, bounced: 2 }),

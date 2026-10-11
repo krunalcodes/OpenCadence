@@ -11,7 +11,16 @@ export type SuppressionReason =
   | "complained"
   | "manual";
 export type SuppressionOrigin = "user" | "api" | "webhook" | "import";
-export type MessageKind = "transactional" | "campaign" | "sequence" | "test";
+export const messageKinds = [
+  "transactional",
+  "campaign",
+  "sequence",
+  "reply",
+  "test",
+] as const;
+export type MessageKind = (typeof messageKinds)[number];
+
+const kindsPastUnsubscribe: MessageKind[] = ["transactional", "reply", "test"];
 
 export type Suppression = {
   id: string;
@@ -133,9 +142,7 @@ export class SuppressionService {
     const rows = await this.repository.findByEmails(
       workspaceId,
       unique,
-      kind === "transactional" || kind === "test"
-        ? deliverabilityReasons
-        : undefined,
+      kindsPastUnsubscribe.includes(kind) ? deliverabilityReasons : undefined,
     );
     for (const row of rows) {
       if (!isReason(row.reason)) {

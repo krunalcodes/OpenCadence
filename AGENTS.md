@@ -69,8 +69,9 @@ Decided. Use these; do not introduce alternatives without asking.
 | Data tables | TanStack Table (React Table) |
 | AI features | Vercel AI SDK through `@ai-sdk/openai-compatible`; each workspace adds its own endpoint, model, and key in settings |
 | Email editor | `@react-email/editor` (one editor for rich text and layout); templates store its document plus exported HTML and text |
+| Date and time pickers | shadcn calendar (`react-day-picker`) behind the shared pickers in `apps/web/components/pickers`; no native date or time inputs |
 | Sequence builder | React Flow (`@xyflow/react`); steps stay an ordered list, the canvas is a view of it |
-| Sending integrations | Resend and Amazon SES first; then Gmail, Outlook, IMAP/SMTP mailboxes and SendGrid-style providers, all behind the adapter interface |
+| Sending integrations | Gmail, Outlook and IMAP/SMTP mailboxes, Resend and Amazon SES built; SendGrid-style providers next, all behind the adapter interface |
 | Authentication | Better Auth (`@workspace/auth`), served by the API at `/api/auth` and proxied by Next; email and password, Google, and the organization (workspaces), two-factor, API key (workspace-owned), Have I Been Pwned and last login method plugins |
 | System email | React Email with Tailwind (`@workspace/email`); Resend and console providers |
 | Package builds | tsdown |
@@ -108,8 +109,8 @@ Turborepo monorepo on Bun workspaces (Bun 1.3+, Node 24+).
 - `packages/typescript-config`: shared tsconfig presets
 - `integrations/core`: the adapter interface every sending integration
   implements (`@workspace/integration-core`)
-- `integrations/gmail`, `integrations/resend`, `integrations/imap-smtp`:
-  sending adapters
+- `integrations/gmail`, `integrations/outlook`, `integrations/imap-smtp`,
+  `integrations/resend`, `integrations/ses`: sending adapters
   (`@workspace/integration-<name>`)
 - `.agents/skills`: project agent skills (symlinked into `.claude/skills`)
 

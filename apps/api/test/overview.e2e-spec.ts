@@ -13,6 +13,7 @@ import {
   overviewCacheKey,
   overviewCacheSeconds,
 } from "../src/modules/analytics/overview.service";
+import { DispatchRepository } from "../src/modules/dispatch/dispatch.repository";
 import {
   createApiKey,
   createWorkspaceSessions,
@@ -95,6 +96,14 @@ describe("Overview (e2e)", () => {
     for (let index = 0; index < rows.length; index += 500) {
       await db.insert(schema.messages).values(rows.slice(index, index + 500));
     }
+    await recountHourlyTotals(workspaceId);
+  }
+
+  async function recountHourlyTotals(workspaceId: string) {
+    await app.get(DispatchRepository).reconcileHourlyStats(workspaceId, {
+      from: ago(200 * 24),
+      to: new Date(Date.now() + hourMs),
+    });
   }
 
   async function clearCache(workspaceId: string) {
@@ -356,6 +365,42 @@ describe("Overview (e2e)", () => {
     ).toBe(90 * 24 * hourMs);
   });
 
+  it("reads whole hours from the hourly totals and the edge hours from messages", async () => {
+    const before = await read(busy, "7d");
+    const insert = (hoursAgo: number) =>
+      db.insert(schema.messages).values({
+        workspaceId: busy.workspaceId,
+        sourceId: busySourceId,
+        createdAt: hoursAgo === 0 ? new Date() : ago(hoursAgo),
+        kind: "transactional",
+        status: "delivered",
+        fromEmail: "news@example.com",
+        toEmails: ["edge@example.com"],
+        subject: "Overview e2e edge",
+      });
+    await insert(0);
+    await insert(6);
+    const edgeOnly = await read(busy, "7d");
+    expect(edgeOnly.stats.sent.value).toBe((before.stats.sent.value ?? 0) + 1);
+
+    await recountHourlyTotals(busy.workspaceId);
+    const recounted = await read(busy, "7d");
+    expect(recounted.stats.sent.value).toBe((before.stats.sent.value ?? 0) + 2);
+
+    await db
+      .delete(schema.messages)
+      .where(
+        and(
+          eq(schema.messages.workspaceId, busy.workspaceId),
+          eq(schema.messages.subject, "Overview e2e edge"),
+        ),
+      );
+    await recountHourlyTotals(busy.workspaceId);
+    expect((await read(busy, "7d")).stats.sent.value).toBe(
+      before.stats.sent.value,
+    );
+  });
+
   it("keeps workspaces apart", async () => {
     const mine = await read(other, "24h");
     expect(mine.stats.sent.value).toBe(9);
@@ -599,6 +644,36 @@ describe("Overview (e2e)", () => {
     await setStatus(brokenId, "needs_attention");
     await setStatus(pausedId, "paused");
 
+    const [failingDomain] = await db
+      .insert(schema.sendingDomains)
+      .values([
+        {
+          workspaceId,
+          domain: "failing.overview-e2e.example.com",
+          status: "failing",
+        },
+        {
+          workspaceId,
+          domain: "healthy.overview-e2e.example.com",
+          status: "verified",
+        },
+      ])
+      .returning({ id: schema.sendingDomains.id });
+    expect((await read(troubled, "24h")).alert).toEqual({
+      code: "domain_failing",
+      entity: {
+        type: "domain",
+        id: failingDomain?.id,
+        name: "failing.overview-e2e.example.com",
+      },
+      others: 0,
+      rate: null,
+      path: "domains",
+    });
+    await db
+      .delete(schema.sendingDomains)
+      .where(eq(schema.sendingDomains.workspaceId, workspaceId));
+
     expect((await read(troubled, "24h")).alert).toEqual({
       code: "source_needs_attention",
       entity: { type: "source", id: brokenId, name: "Broken source" },
@@ -634,11 +709,13 @@ describe("Overview (e2e)", () => {
     expect(bounce?.rate).toBeCloseTo(30 / 1032, 10);
 
     await restate("bounced", "delivered");
+    await recountHourlyTotals(workspaceId);
     const complaint = (await read(troubled, "24h")).alert;
     expect(complaint).toMatchObject({ code: "complaint_rate_high" });
     expect(complaint?.rate).toBeCloseTo(2 / 1032, 10);
 
     await restate("complained", "delivered");
+    await recountHourlyTotals(workspaceId);
     expect((await read(troubled, "24h")).alert).toBeNull();
   });
 });

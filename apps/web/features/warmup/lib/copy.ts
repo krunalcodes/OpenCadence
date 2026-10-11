@@ -15,7 +15,7 @@ const providerNames: Record<string, string> = {
   outlook: "Outlook",
   "imap-smtp": "IMAP/SMTP",
   resend: "Resend",
-  "amazon-ses": "Amazon SES",
+  ses: "Amazon SES",
   sendgrid: "SendGrid",
   smtp: "SMTP relay",
 };

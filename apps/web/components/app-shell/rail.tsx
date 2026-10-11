@@ -27,6 +27,9 @@ import {
   areaHref,
   areas,
   defaultPagePath,
+  type NavArea,
+  type ViewCounts,
+  withViewCounts,
 } from "@/lib/navigation";
 
 const railFocus =
@@ -47,15 +50,35 @@ export type ShellUser = {
   initials: string;
 };
 
+function areaLabel(area: NavArea) {
+  const parts = [area.title];
+  if (area.count) {
+    parts.push(`${area.count} ${area.countNoun ?? ""}`.trim());
+  }
+  if (area.attention) {
+    parts.push("needs attention");
+  }
+  return parts.join(", ");
+}
+
 type RailProps = {
   activeAreaId: AreaId;
+  counts: ViewCounts;
   user: ShellUser;
   signingOut: boolean;
   onSignOut: () => void;
 };
 
-export function Rail({ activeAreaId, user, signingOut, onSignOut }: RailProps) {
-  const mainAreas = areas.filter((area) => area.id !== "settings");
+export function Rail({
+  activeAreaId,
+  counts,
+  user,
+  signingOut,
+  onSignOut,
+}: RailProps) {
+  const mainAreas = areas
+    .filter((area) => area.id !== "settings")
+    .map((area) => withViewCounts(area, counts));
   const settingsActive = activeAreaId === "settings";
 
   return (
@@ -94,11 +117,7 @@ export function Rail({ activeAreaId, user, signingOut, onSignOut }: RailProps) {
                   render={
                     <Link
                       href={appHref(first?.path ?? defaultPagePath)}
-                      aria-label={
-                        area.attention
-                          ? `${area.title}, needs attention`
-                          : area.title
-                      }
+                      aria-label={areaLabel(area)}
                       aria-current={active ? "true" : undefined}
                     />
                   }
@@ -109,7 +128,14 @@ export function Rail({ activeAreaId, user, signingOut, onSignOut }: RailProps) {
                   )}
                 >
                   <Icon className="size-[18px]" strokeWidth={1.6} aria-hidden />
-                  {area.attention ? (
+                  {area.count ? (
+                    <span
+                      aria-hidden
+                      className="absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary-foreground px-1 font-semibold text-[10px] text-primary leading-none tabular-nums ring-2 ring-rail"
+                    >
+                      {area.count}
+                    </span>
+                  ) : area.attention ? (
                     <span
                       aria-hidden
                       className="absolute top-1.5 right-1.5 size-2 rounded-full bg-danger ring-2 ring-rail"
@@ -117,9 +143,7 @@ export function Rail({ activeAreaId, user, signingOut, onSignOut }: RailProps) {
                   ) : null}
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={10}>
-                  {area.attention
-                    ? `${area.title}, needs attention`
-                    : area.title}
+                  {areaLabel(area)}
                 </TooltipContent>
               </Tooltip>
             </li>

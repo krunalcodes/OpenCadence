@@ -195,8 +195,15 @@ export function ListsScreen({ result }: ListsScreenProps) {
                     className="border-border-subtle hover:bg-muted/50"
                   >
                     <TableCell className={cn(tableCellClass, "max-w-[480px]")}>
-                      <div className="truncate font-medium text-foreground">
-                        {list.name}
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="truncate font-medium text-foreground">
+                          {list.name}
+                        </div>
+                        {list.isPublic ? (
+                          <span className="inline-flex h-[22px] shrink-0 items-center rounded-[6px] bg-border-subtle px-2 text-xs font-medium whitespace-nowrap text-muted-foreground">
+                            {copy.publicBadge}
+                          </span>
+                        ) : null}
                       </div>
                       {list.description ? (
                         <div

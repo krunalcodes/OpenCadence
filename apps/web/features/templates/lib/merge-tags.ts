@@ -21,6 +21,8 @@ export const brandMergeKeys = [
 
 export const unsubscribeKey = "unsubscribe_url";
 
+export const preferencesKey = "preferences_url";
+
 const keyPattern = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)?$/;
 
 const tagPattern =
@@ -50,6 +52,10 @@ export function mergeTagOptions(fields: MergeField[]): Option[] {
     {
       value: unsubscribeKey,
       label: text.option(text.groups.system, label(unsubscribeKey)),
+    },
+    {
+      value: preferencesKey,
+      label: text.option(text.groups.system, label(preferencesKey)),
     },
   ];
 }
@@ -90,6 +96,7 @@ export function sampleValues(
     "brand.address": brand.address,
     "brand.website": brand.website,
     [unsubscribeKey]: "#",
+    [preferencesKey]: "#",
   };
   for (const field of fields) {
     values[`fields.${field.key}`] = "";

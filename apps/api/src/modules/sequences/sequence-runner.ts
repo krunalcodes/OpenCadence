@@ -128,8 +128,17 @@ function windowOf(row: SequenceRow): SendWindow {
   };
 }
 
-function isUsable(source: SendingSourceDto | undefined) {
-  return Boolean(source && source.status === "active" && source.email);
+function fromAddress(
+  source: SendingSourceDto | undefined,
+  sequence: SequenceRow,
+) {
+  return source?.email || sequence.fromEmail || null;
+}
+
+function isUsable(source: SendingSourceDto | undefined, sequence: SequenceRow) {
+  return Boolean(
+    source && source.status === "active" && fromAddress(source, sequence),
+  );
 }
 
 function errorCode(error: unknown) {
@@ -327,7 +336,9 @@ export class SequenceRunner {
     const sources = await this.workspaceSources(context, workspaceId);
     let sourceId = enrollment.sourceId;
     if (!sourceId) {
-      const usable = row.sourceIds.filter((id) => isUsable(sources.get(id)));
+      const usable = row.sourceIds.filter((id) =>
+        isUsable(sources.get(id), row),
+      );
       if (usable.length === 0) {
         await later(new Date(now.getTime() + retryUnusableSourceMs));
         return;
@@ -361,7 +372,7 @@ export class SequenceRunner {
     }
 
     const source = sources.get(sourceId);
-    if (!source || !isUsable(source)) {
+    if (!source || !isUsable(source, row)) {
       await later(new Date(now.getTime() + retryUnusableSourceMs));
       return;
     }
@@ -462,7 +473,7 @@ export class SequenceRunner {
         kind: "sequence",
         sourceId: source.id,
         from: {
-          email: source.email ?? "",
+          email: fromAddress(source, sequence) ?? "",
           name: sequence.fromName ?? (brand.name.trim() || null),
         },
         to: [contact.email],

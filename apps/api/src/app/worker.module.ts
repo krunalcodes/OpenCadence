@@ -9,7 +9,10 @@ import { StorageModule } from "../infra/storage/storage.module";
 import { TrackingKeysModule } from "../infra/tracking-keys/tracking-keys.module";
 import { CampaignsWorkerModule } from "../modules/campaigns/campaigns.worker.module";
 import { DispatchWorkerModule } from "../modules/dispatch/dispatch.worker.module";
+import { DomainsWorkerModule } from "../modules/domains/domains.worker.module";
+import { FormsWorkerModule } from "../modules/forms/forms.worker.module";
 import { ImportsWorkerModule } from "../modules/imports/imports.worker.module";
+import { InboxWorkerModule } from "../modules/inbox/inbox.worker.module";
 import { IntegrationsWorkerModule } from "../modules/integrations/integrations.worker.module";
 import { SequencesWorkerModule } from "../modules/sequences/sequences.worker.module";
 import { WarmupWorkerModule } from "../modules/warmup/warmup.worker.module";
@@ -18,9 +21,12 @@ const featureWorkerModules = [
   IntegrationsWorkerModule,
   DispatchWorkerModule,
   WarmupWorkerModule,
+  DomainsWorkerModule,
   ImportsWorkerModule,
+  FormsWorkerModule,
   CampaignsWorkerModule,
   SequencesWorkerModule,
+  InboxWorkerModule,
 ];
 
 @Module({

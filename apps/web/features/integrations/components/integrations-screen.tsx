@@ -26,6 +26,8 @@ import {
   secondaryButtonClass,
 } from "@/components/product/styles";
 import { ConnectSheet } from "@/features/integrations/components/connect-sheet";
+import { ReplyDetectionDialog } from "@/features/integrations/components/reply-detection-dialog";
+import { SesSetupSheet } from "@/features/integrations/components/ses-setup-sheet";
 import { SourceCatalog } from "@/features/integrations/components/source-catalog";
 import {
   DailyLimitDialog,
@@ -37,12 +39,18 @@ import {
   type RowAction,
   SourcesTable,
 } from "@/features/integrations/components/sources-table";
-import type { IntegrationId } from "@/features/integrations/lib/catalog";
 import {
+  type IntegrationId,
+  mailboxProviderOf,
+} from "@/features/integrations/lib/catalog";
+import {
+  companyOf,
   copy,
   describeConnectError,
   describeError,
+  describeProviderError,
   describeSourceError,
+  providerNameOf,
   sourceSecondLine,
 } from "@/features/integrations/lib/copy";
 import type {
@@ -50,7 +58,8 @@ import type {
   SourcesResult,
 } from "@/features/integrations/lib/sources";
 import {
-  authorizeGmail,
+  authorizeMailbox,
+  stopReplyDetection,
   testSource,
   updateSource,
 } from "@/features/integrations/queries/mutations";
@@ -58,7 +67,9 @@ import { appHref } from "@/lib/navigation";
 
 export type ConnectNotice = {
   connected: string | null;
+  replyDetection: string | null;
   connectError: string | null;
+  provider: string | null;
 };
 
 type IntegrationsScreenProps = {
@@ -66,7 +77,13 @@ type IntegrationsScreenProps = {
   notice: ConnectNotice;
 };
 
-type DialogKind = "rename" | "limit" | "testEmail" | "disconnect";
+type DialogKind =
+  | "rename"
+  | "limit"
+  | "testEmail"
+  | "disconnect"
+  | "replies"
+  | "setup";
 
 const noSources: SendingSource[] = [];
 
@@ -98,16 +115,37 @@ export function IntegrationsScreen({
   }
 
   useEffect(() => {
-    if (noticeShown.current || (!notice.connected && !notice.connectError)) {
+    const provider =
+      mailboxProviderOf(
+        notice.provider ?? notice.connected ?? notice.replyDetection ?? "",
+      ) ?? "gmail";
+    if (
+      noticeShown.current ||
+      (!notice.connected && !notice.connectError && !notice.replyDetection)
+    ) {
       return;
     }
     noticeShown.current = true;
+    const name = providerNameOf(provider);
     if (notice.connectError) {
-      toast.error(copy.connectErrors.title, {
-        description: describeConnectError(notice.connectError),
+      const aboutReplies = [
+        "read_scope_not_granted",
+        "reply_detection_disabled",
+        "account_mismatch",
+        "source_missing",
+      ].includes(notice.connectError);
+      toast.error(
+        aboutReplies
+          ? copy.connectErrors.replyDetectionTitle(name)
+          : copy.connectErrors.title(name),
+        { description: describeConnectError(notice.connectError, provider) },
+      );
+    } else if (notice.replyDetection) {
+      toast.success(copy.toasts.replyDetectionOn(name), {
+        description: copy.toasts.replyDetectionOnBody,
       });
     } else {
-      toast.success(copy.toasts.gmailConnected, {
+      toast.success(copy.toasts.mailboxConnected(name), {
         description: copy.toasts.connectedBody,
       });
     }
@@ -151,7 +189,12 @@ export function IntegrationsScreen({
   }
 
   function dialogSource(kind: DialogKind) {
-    return dialog?.kind === kind ? dialog.source : null;
+    if (dialog?.kind !== kind) {
+      return null;
+    }
+    return (
+      sources.find((source) => source.id === dialog.source.id) ?? dialog.source
+    );
   }
 
   function closeDialog() {
@@ -273,8 +316,13 @@ export function IntegrationsScreen({
     if (busy) {
       return;
     }
+    const provider = mailboxProviderOf(source.integrationType);
+    if (!provider) {
+      return;
+    }
     setBusy({ id: source.id, action: "reconnect" });
-    const response = await authorizeGmail(
+    const response = await authorizeMailbox(
+      provider,
       source.dailySendLimit === null
         ? {}
         : { dailySendLimit: source.dailySendLimit },
@@ -289,12 +337,39 @@ export function IntegrationsScreen({
     });
   }
 
+  async function handleStopDetectingReplies(source: SendingSource) {
+    const provider = mailboxProviderOf(source.integrationType);
+    if (busy || !provider) {
+      return;
+    }
+    setBusy({ id: source.id, action: "replies" });
+    const response = await stopReplyDetection(source.id);
+    setBusy(null);
+    if (!response.ok) {
+      toast.error(copy.toasts.replyDetectionStopFailed(source.name), {
+        description: describeProviderError(response.error),
+      });
+      if (response.error.code === "not_found") {
+        router.refresh();
+      }
+      return;
+    }
+    applySource(response.data);
+    toast.success(copy.toasts.replyDetectionOff(source.name), {
+      description: copy.toasts.replyDetectionOffBody(companyOf(provider)),
+    });
+  }
+
   function handleConnected(source: SendingSource) {
     setSheetOpen(false);
     setQuery("");
     toast.success(copy.toasts.connected(source.name), {
       description: copy.toasts.connectedBody,
     });
+    if (source.details.account) {
+      setOverrides((current) => ({ ...current, [source.id]: source }));
+      setDialog({ kind: "setup", source });
+    }
     router.refresh();
   }
 
@@ -407,6 +482,9 @@ export function IntegrationsScreen({
             onToggleDefault={handleToggleDefault}
             onDisconnect={openDialog("disconnect")}
             onReconnect={handleReconnect}
+            onDetectReplies={openDialog("replies")}
+            onStopDetectingReplies={handleStopDetectingReplies}
+            onSetup={openDialog("setup")}
           />
         )}
       </SectionCard>
@@ -424,12 +502,24 @@ export function IntegrationsScreen({
       <ConnectSheet
         open={sheetOpen}
         integrationId={picked}
-        gmailConnectable={ready && result.connectable.gmail}
+        setup={ready ? result : null}
         onPick={setPicked}
         onOpenChange={setSheetOpen}
         onConnected={handleConnected}
       />
 
+      <ReplyDetectionDialog
+        source={dialogSource("replies")}
+        onClose={closeDialog}
+        onChanged={() => router.refresh()}
+      />
+      <SesSetupSheet
+        source={dialogSource("setup")}
+        refreshing={busy?.action === "test"}
+        onRefresh={handleTest}
+        onClose={closeDialog}
+        onChanged={applySource}
+      />
       <RenameSourceDialog
         source={dialogSource("rename")}
         onClose={closeDialog}

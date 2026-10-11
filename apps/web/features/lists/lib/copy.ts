@@ -15,6 +15,7 @@ export const copy = {
   },
   days: { today: "Today", yesterday: "Yesterday" },
   actionsFor: (name: string) => `Actions for ${name}`,
+  publicBadge: "In preference centre",
   menu: {
     view: "View contacts",
     edit: "Rename and describe",
@@ -41,6 +42,16 @@ export const copy = {
     description: "Description",
     optional: "Optional",
     descriptionPlaceholder: "What contacts on this list receive",
+    isPublic: "Show in the preference centre",
+    isPublicHint:
+      "People can join or leave this list themselves from the preferences link in your emails. Lists that are not shown only appear to people already subscribed to them.",
+    publicName: "Public name",
+    publicNameHint:
+      "What subscribers see. Leave it empty to show the list name.",
+    publicDescription: "Public description",
+    publicDescriptionPlaceholder: "One email a month with our best articles",
+    publicDescriptionHint:
+      "A line under the name that tells people what they will get.",
     create: "Create list",
     save: "Save changes",
     cancel: "Cancel",

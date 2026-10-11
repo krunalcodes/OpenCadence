@@ -57,6 +57,20 @@
       "when": 1791715753138,
       "tag": "0007_closed_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791720725660,
+      "tag": "0008_calm_risque",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791721884172,
+      "tag": "0009_open_sprite",
+      "breakpoints": true
     }
   ]
 }

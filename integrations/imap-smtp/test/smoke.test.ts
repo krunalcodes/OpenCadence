@@ -311,6 +311,7 @@ describe.skipIf(!certificate)("real protocol", () => {
     expect(first).toEqual({
       messages: [
         {
+          ref: "9:41",
           messageId: "<reply-41@customer.example>",
           inReplyTo: root,
           references: [root],
@@ -331,6 +332,7 @@ describe.skipIf(!certificate)("real protocol", () => {
     expect(second).toEqual({
       messages: [
         {
+          ref: "9:42",
           messageId: "<dsn-42@mx.customer.example>",
           references: [],
           from: { email: "MAILER-DAEMON@mx.customer.example" },
@@ -410,6 +412,91 @@ describe.skipIf(!certificate)("real protocol", () => {
       "UID SEARCH UID 43:*",
     ]);
     expect(imap.flagsOf("INBOX")).toEqual([[], []]);
+  });
+
+  it("fetches one reply's text over a read-only session with PEEK, a size cap and no attachment", async () => {
+    const html = "<p>Thursday works. <b>See you then.</b></p>";
+    const { inbox, credentials, imap } = await start({
+      imap: {
+        received: [
+          {
+            uid: 41,
+            internalDate: "10-Oct-2026 08:30:00 +0000",
+            envelope:
+              '("Sat, 10 Oct 2026 08:29:00 +0000" "=?UTF-8?Q?Re:_Caf=C3=A9_on_Thursday=3F?=" (("Grace Hopper" NIL "grace" "customer.example")) NIL NIL ((NIL NIL "ada" "example.com")) NIL NIL "<root@example.com>" "<reply-41@customer.example>")',
+            headers: "Content-Type: multipart/mixed\r\n\r\n",
+            bodyStructure:
+              '((("TEXT" "PLAIN" ("CHARSET" "iso-8859-1") NIL NIL "QUOTED-PRINTABLE" 40 1 NIL NIL NIL NIL)("TEXT" "HTML" ("CHARSET" "utf-8") NIL NIL "BASE64" 90 2 NIL NIL NIL NIL) "ALTERNATIVE" ("BOUNDARY" "b2") NIL NIL NIL)("APPLICATION" "PDF" ("NAME" "contract.pdf") NIL NIL "BASE64" 1200 NIL ("ATTACHMENT" ("FILENAME" "contract.pdf")) NIL NIL) "MIXED" ("BOUNDARY" "b1") NIL NIL NIL)',
+            parts: {
+              "1.1": "Thursday works at the caf=E9. See you =\r\nthen.",
+              "1.2": Buffer.from(html).toString("base64"),
+              "2": "JVBERi0xLjQK",
+            },
+          },
+        ],
+      },
+    });
+
+    const content = await inbox.fetchReceived?.(credentials, "9:41");
+    expect(content).toEqual({
+      subject: "Re: Caf\u00e9 on Thursday?",
+      text: "Thursday works at the caf\u00e9. See you then.",
+      html,
+      from: { email: "grace@customer.example", name: "Grace Hopper" },
+      to: ["ada@example.com"],
+      date: new Date("2026-10-10T08:29:00.000Z"),
+    });
+    expect(await inbox.fetchReceived?.(credentials, "8:41")).toBeNull();
+    expect(await inbox.fetchReceived?.(credentials, "9:77")).toBeNull();
+
+    const used = new Set(
+      imap.commands.map((command) =>
+        command.startsWith("UID ")
+          ? command.split(" ").slice(0, 2).join(" ")
+          : command.split(" ")[0],
+      ),
+    );
+    for (const changing of [
+      "SELECT",
+      "UID STORE",
+      "STORE",
+      "UID MOVE",
+      "UID COPY",
+      "UID EXPUNGE",
+      "EXPUNGE",
+      "APPEND",
+      "CREATE",
+      "DELETE",
+      "CLOSE",
+    ]) {
+      expect(used.has(changing)).toBe(false);
+    }
+    expect(
+      imap.commands.filter((command) => command.startsWith("EXAMINE")),
+    ).toEqual(["EXAMINE INBOX", "EXAMINE INBOX", "EXAMINE INBOX"]);
+    expect(
+      imap.commands.filter((command) => command.startsWith("UID SEARCH")),
+    ).toEqual([]);
+    const fetches = imap.commands.filter((command) =>
+      command.startsWith("UID FETCH"),
+    );
+    expect(fetches).toHaveLength(3);
+    expect(fetches[0]).toMatch(/^UID FETCH 41 /);
+    expect(fetches[0]).toMatch(/ENVELOPE/);
+    expect(fetches[0]).toMatch(/BODYSTRUCTURE/);
+    expect(fetches[0]).not.toMatch(/BODY\.PEEK\[|BODY\[/i);
+    expect(fetches[1]).toMatch(/^UID FETCH 41 /);
+    expect(fetches[1]).toMatch(/BODY\.PEEK\[1\.1\]<0\.262144>/i);
+    expect(fetches[1]).toMatch(/BODY\.PEEK\[1\.2\]<0\.262144>/i);
+    expect(fetches[2]).toMatch(/^UID FETCH 77 /);
+    for (const fetch of fetches) {
+      expect(fetch).not.toMatch(/\[2\]|\[\]|\[TEXT\]|\[1\]/i);
+      expect(fetch.replace(/BODY\.PEEK\[/gi, "")).not.toMatch(
+        /BODY\[|RFC822(?!\.SIZE)|BINARY\[/i,
+      );
+    }
+    expect(imap.flagsOf("INBOX")).toEqual([[]]);
+    expect(imap.commands.at(-1)).toBe("LOGOUT");
   });
 
   it("returns null when the search excludes spam", async () => {

@@ -12,12 +12,16 @@ import {
   sql,
 } from "@workspace/db";
 import { DATABASE } from "../../infra/database/database.module";
-import type { MessageEventType } from "./dispatch.constants";
+import {
+  bulkIdempotencyKeyPrefixes,
+  type MessageEventType,
+} from "./dispatch.constants";
 
 const {
   contentSnapshots,
   messageContents,
   messageEvents,
+  messageHourlyStats,
   messageIdempotencyKeys,
   messages,
   sendingSources,
@@ -104,6 +108,158 @@ export type EngagementTotalsRow = {
 
 export type HourlyKindRow = { kind: string; hour: number; count: number };
 
+export type TotalsWindow = { from: Date; split: Date; to: Date };
+
+export const hourlyCounters = [
+  "sent",
+  "delivered",
+  "bounced",
+  "complained",
+  "failed",
+  "opened",
+  "clicked",
+  "replied",
+  "unsubscribed",
+] as const;
+
+export type HourlyCounter = (typeof hourlyCounters)[number];
+
+type SQL = ReturnType<typeof sql>;
+
+type MessageState = {
+  status: string;
+  opened: boolean;
+  clicked: boolean;
+  replied: boolean;
+  unsubscribed: boolean;
+};
+
+type HourlyKey = {
+  workspaceId: string;
+  hour: Date;
+  kind: string;
+  trackOpens: boolean;
+};
+
+const hourMs = 60 * 60 * 1000;
+
+const countedStatuses = {
+  sent: ["sent", "delivered", "delayed", "bounced", "complained"],
+  delivered: ["delivered", "complained"],
+  bounced: ["bounced"],
+  complained: ["complained"],
+  failed: ["failed"],
+} as const satisfies Partial<Record<HourlyCounter, readonly string[]>>;
+
+function statusIn(statuses: readonly string[]) {
+  const list = statuses.map((status) => `'${status}'`).join(", ");
+  return sql`${messages.status} in (${sql.raw(list)})`;
+}
+
+const counted: Record<HourlyCounter, SQL> = {
+  sent: statusIn(countedStatuses.sent),
+  delivered: statusIn(countedStatuses.delivered),
+  bounced: statusIn(countedStatuses.bounced),
+  complained: statusIn(countedStatuses.complained),
+  failed: statusIn(countedStatuses.failed),
+  opened: sql`${messages.firstOpenedAt} is not null`,
+  clicked: sql`${messages.firstClickedAt} is not null`,
+  replied: sql`${messages.repliedAt} is not null`,
+  unsubscribed: sql`${messages.unsubscribedAt} is not null`,
+};
+
+function counts(state: MessageState): Record<HourlyCounter, number> {
+  const has = (statuses: readonly string[]) =>
+    Number(statuses.includes(state.status));
+  return {
+    sent: has(countedStatuses.sent),
+    delivered: has(countedStatuses.delivered),
+    bounced: has(countedStatuses.bounced),
+    complained: has(countedStatuses.complained),
+    failed: has(countedStatuses.failed),
+    opened: Number(state.opened),
+    clicked: Number(state.clicked),
+    replied: Number(state.replied),
+    unsubscribed: Number(state.unsubscribed),
+  };
+}
+
+export function hourlyDelta(before: MessageState, after: MessageState) {
+  const from = counts(before);
+  const to = counts(after);
+  const delta = Object.fromEntries(
+    hourlyCounters.map((counter) => [counter, to[counter] - from[counter]]),
+  ) as Record<HourlyCounter, number>;
+  return hourlyCounters.some((counter) => delta[counter] !== 0) ? delta : null;
+}
+
+export function hourFloor(date: Date) {
+  return new Date(Math.floor(date.getTime() / hourMs) * hourMs);
+}
+
+export function hourCeil(date: Date) {
+  return new Date(Math.ceil(date.getTime() / hourMs) * hourMs);
+}
+
+function timestamp(date: Date) {
+  return sql`${date.toISOString()}::timestamptz`;
+}
+
+function counterList(render: (counter: HourlyCounter) => SQL) {
+  return sql.join(hourlyCounters.map(render), sql`, `);
+}
+
+function bucketCounts(
+  workspaceId: string,
+  window: { from: Date; to: Date },
+  key?: { kind: string; trackOpens: boolean },
+) {
+  return sql`
+    select
+      date_trunc('hour', ${messages.createdAt}, 'UTC') as hour,
+      ${messages.kind} as kind,
+      ${messages.trackOpens} as track_opens,
+      ${counterList(
+        (counter) =>
+          sql`(count(*) filter (where ${counted[counter]}))::int as ${sql.identifier(counter)}`,
+      )}
+    from ${messages}
+    where ${messages.workspaceId} = ${workspaceId}
+      and ${messages.createdAt} >= ${timestamp(window.from)}
+      and ${messages.createdAt} < ${timestamp(window.to)}
+      ${key ? sql`and ${messages.kind} = ${key.kind} and ${messages.trackOpens} = ${key.trackOpens}` : sql``}
+    group by 1, 2, 3
+    having ${sql.join(
+      hourlyCounters.map(
+        (counter) => sql`count(*) filter (where ${counted[counter]}) > 0`,
+      ),
+      sql` or `,
+    )}
+  `;
+}
+
+function mergeTotals(rows: EngagementTotalsRow[]) {
+  const merged = new Map<boolean, EngagementTotalsRow>();
+  for (const row of rows) {
+    const known = merged.get(row.current);
+    if (!known) {
+      merged.set(row.current, { ...row });
+      continue;
+    }
+    known.sent += row.sent;
+    known.delivered += row.delivered;
+    known.bounced += row.bounced;
+    known.complained += row.complained;
+    known.trackedSent += row.trackedSent;
+    known.trackedDelivered += row.trackedDelivered;
+    known.opened += row.opened;
+    known.sequenceSent += row.sequenceSent;
+    known.sequenceDelivered += row.sequenceDelivered;
+    known.replied += row.replied;
+  }
+  return [...merged.values()];
+}
+
 export type PartitionedTable =
   | "messages"
   | "message_contents"
@@ -115,6 +271,13 @@ const partitionedTables: PartitionedTable[] = [
   "message_events",
 ];
 const idempotencyConstraint = "message_idempotency_keys_pk";
+const bulkIdempotencyKey = sql.join(
+  bulkIdempotencyKeyPrefixes.map(
+    (prefix) =>
+      sql`${messageIdempotencyKeys.key} like ${sql.raw(`'${prefix}%'`)}`,
+  ),
+  sql` or `,
+);
 
 function assertPartitionedTable(
   table: string,
@@ -317,10 +480,39 @@ export class DispatchRepository {
         )
         .returning({
           workspaceId: messages.workspaceId,
+          kind: messages.kind,
+          trackOpens: messages.trackOpens,
           previousOpenCount: sql<number>`old.open_count`,
+          before: {
+            status: sql<string>`old.status`,
+            opened: sql<boolean>`old.first_opened_at is not null`,
+            clicked: sql<boolean>`old.first_clicked_at is not null`,
+            replied: sql<boolean>`old.replied_at is not null`,
+            unsubscribed: sql<boolean>`old.unsubscribed_at is not null`,
+          },
+          after: {
+            status: messages.status,
+            opened: sql<boolean>`new.first_opened_at is not null`,
+            clicked: sql<boolean>`new.first_clicked_at is not null`,
+            replied: sql<boolean>`new.replied_at is not null`,
+            unsubscribed: sql<boolean>`new.unsubscribed_at is not null`,
+          },
         });
       if (!updated) {
         return null;
+      }
+      const delta = hourlyDelta(updated.before, updated.after);
+      if (delta) {
+        await this.addToHourlyStats(
+          tx,
+          {
+            workspaceId: updated.workspaceId,
+            hour: hourFloor(write.messageCreatedAt),
+            kind: updated.kind,
+            trackOpens: updated.trackOpens,
+          },
+          delta,
+        );
       }
       const event = {
         createdAt: write.eventCreatedAt,
@@ -399,35 +591,274 @@ export class DispatchRepository {
 
   async engagementTotals(
     workspaceId: string,
-    window: { from: Date; split: Date; to: Date },
+    window: TotalsWindow,
   ): Promise<EngagementTotalsRow[]> {
-    const sent = sql`${messages.status} in ('sent', 'delivered', 'delayed', 'bounced', 'complained')`;
-    const delivered = sql`${messages.status} in ('delivered', 'complained')`;
-    const sequence = sql`${messages.kind} = 'sequence'`;
+    const previous = {
+      from: hourCeil(window.from),
+      to: hourFloor(window.split),
+    };
+    const current = { from: hourCeil(window.split), to: hourFloor(window.to) };
+    if (previous.from > previous.to || current.from > current.to) {
+      return this.engagementTotalsFromMessages(workspaceId, window);
+    }
+    const edges = [
+      { from: window.from, to: previous.from },
+      { from: previous.to, to: current.from },
+      { from: current.to, to: window.to },
+    ].filter((edge) => edge.from < edge.to);
+    const [whole, partial] = await Promise.all([
+      this.totalsFromHourlyStats(workspaceId, previous, current),
+      edges.length > 0
+        ? this.totalsFromMessages(workspaceId, window.split, edges)
+        : [],
+    ]);
+    return mergeTotals([...whole, ...partial]);
+  }
+
+  engagementTotalsFromMessages(
+    workspaceId: string,
+    window: TotalsWindow,
+  ): Promise<EngagementTotalsRow[]> {
+    return this.totalsFromMessages(workspaceId, window.split, [
+      { from: window.from, to: window.to },
+    ]);
+  }
+
+  private async totalsFromHourlyStats(
+    workspaceId: string,
+    previous: { from: Date; to: Date },
+    current: { from: Date; to: Date },
+  ): Promise<EngagementTotalsRow[]> {
+    const stats = messageHourlyStats;
+    const sum = (counter: HourlyCounter, filter?: SQL) =>
+      sql<number>`coalesce(sum(${stats[counter]})${filter ? sql` filter (where ${filter})` : sql``}, 0)::int`;
+    const sequence = sql`${stats.kind} = 'sequence'`;
     return this.db
       .select({
-        current: sql<boolean>`${messages.createdAt} >= ${window.split.toISOString()}::timestamptz`,
-        sent: sql<number>`(count(*) filter (where ${sent}))::int`,
-        delivered: sql<number>`(count(*) filter (where ${delivered}))::int`,
-        bounced: sql<number>`(count(*) filter (where ${messages.status} = 'bounced'))::int`,
-        complained: sql<number>`(count(*) filter (where ${messages.status} = 'complained'))::int`,
-        trackedSent: sql<number>`(count(*) filter (where ${messages.trackOpens} and ${sent}))::int`,
-        trackedDelivered: sql<number>`(count(*) filter (where ${messages.trackOpens} and ${delivered}))::int`,
-        opened: sql<number>`(count(*) filter (where ${messages.trackOpens} and ${messages.firstOpenedAt} is not null))::int`,
-        sequenceSent: sql<number>`(count(*) filter (where ${sequence} and ${sent}))::int`,
-        sequenceDelivered: sql<number>`(count(*) filter (where ${sequence} and ${delivered}))::int`,
-        replied: sql<number>`(count(*) filter (where ${sequence} and ${messages.repliedAt} is not null))::int`,
+        current: sql<boolean>`${stats.hour} >= ${timestamp(current.from)}`,
+        sent: sum("sent"),
+        delivered: sum("delivered"),
+        bounced: sum("bounced"),
+        complained: sum("complained"),
+        trackedSent: sum("sent", sql`${stats.trackOpens}`),
+        trackedDelivered: sum("delivered", sql`${stats.trackOpens}`),
+        opened: sum("opened", sql`${stats.trackOpens}`),
+        sequenceSent: sum("sent", sequence),
+        sequenceDelivered: sum("delivered", sequence),
+        replied: sum("replied", sequence),
+      })
+      .from(stats)
+      .where(
+        and(
+          eq(stats.workspaceId, workspaceId),
+          sql`${stats.kind} <> 'test'`,
+          or(
+            and(gte(stats.hour, previous.from), lt(stats.hour, previous.to)),
+            and(gte(stats.hour, current.from), lt(stats.hour, current.to)),
+          ),
+        ),
+      )
+      .groupBy(sql`1`);
+  }
+
+  private async totalsFromMessages(
+    workspaceId: string,
+    split: Date,
+    ranges: { from: Date; to: Date }[],
+  ): Promise<EngagementTotalsRow[]> {
+    const tracked = sql`${messages.trackOpens}`;
+    const sequence = sql`${messages.kind} = 'sequence'`;
+    const count = (...filters: SQL[]) =>
+      sql<number>`(count(*) filter (where ${sql.join(filters, sql` and `)}))::int`;
+    return this.db
+      .select({
+        current: sql<boolean>`${messages.createdAt} >= ${timestamp(split)}`,
+        sent: count(counted.sent),
+        delivered: count(counted.delivered),
+        bounced: count(counted.bounced),
+        complained: count(counted.complained),
+        trackedSent: count(tracked, counted.sent),
+        trackedDelivered: count(tracked, counted.delivered),
+        opened: count(tracked, counted.opened),
+        sequenceSent: count(sequence, counted.sent),
+        sequenceDelivered: count(sequence, counted.delivered),
+        replied: count(sequence, counted.replied),
       })
       .from(messages)
       .where(
         and(
           eq(messages.workspaceId, workspaceId),
-          gte(messages.createdAt, window.from),
-          lt(messages.createdAt, window.to),
+          or(
+            ...ranges.map((range) =>
+              and(
+                gte(messages.createdAt, range.from),
+                lt(messages.createdAt, range.to),
+              ),
+            ),
+          ),
           sql`${messages.kind} <> 'test'`,
         ),
       )
       .groupBy(sql`1`);
+  }
+
+  private async addToHourlyStats(
+    tx: Pick<Db, "insert" | "execute">,
+    key: HourlyKey,
+    delta: Record<HourlyCounter, number>,
+  ) {
+    const stats = messageHourlyStats;
+    const [row] = await tx
+      .insert(stats)
+      .values({ ...key, ...delta })
+      .onConflictDoUpdate({
+        target: [stats.workspaceId, stats.hour, stats.kind, stats.trackOpens],
+        set: Object.fromEntries(
+          hourlyCounters.map((counter) => [
+            counter,
+            sql`${stats[counter]} + excluded.${sql.identifier(counter)}`,
+          ]),
+        ),
+      })
+      .returning({ created: sql<boolean>`${stats}.xmax = 0` });
+    if (!row?.created) {
+      return;
+    }
+    const window = {
+      from: key.hour,
+      to: new Date(key.hour.getTime() + hourMs),
+    };
+    await tx.execute(sql`
+      update ${stats} as stats
+      set ${counterList((counter) => sql`${sql.identifier(counter)} = fresh.${sql.identifier(counter)}`)}
+      from (${bucketCounts(key.workspaceId, window, key)}) as fresh
+      where stats.workspace_id = ${key.workspaceId}
+        and stats.hour = fresh.hour
+        and stats.kind = fresh.kind
+        and stats.track_opens = fresh.track_opens
+    `);
+  }
+
+  async reconcileHourlyStats(
+    workspaceId: string,
+    range: { from: Date; to: Date },
+  ) {
+    const stats = messageHourlyStats;
+    const window = { from: hourFloor(range.from), to: hourCeil(range.to) };
+    return this.db.transaction(async (tx) => {
+      const locked = await tx
+        .select({
+          hour: stats.hour,
+          kind: stats.kind,
+          trackOpens: stats.trackOpens,
+        })
+        .from(stats)
+        .where(
+          and(
+            eq(stats.workspaceId, workspaceId),
+            gte(stats.hour, window.from),
+            lt(stats.hour, window.to),
+          ),
+        )
+        .orderBy(stats.hour, stats.kind, stats.trackOpens)
+        .for("update");
+      const hours = locked.map((row) => row.hour.toISOString());
+      const kinds = locked.map((row) => row.kind);
+      const tracked = locked.map((row) => row.trackOpens);
+      const result = await tx.execute<{ corrected: number; added: number }>(sql`
+        with fresh as materialized (
+          ${bucketCounts(workspaceId, window)}
+        ),
+        locked as (
+          select * from unnest(
+            ${sql.param(hours)}::timestamptz[],
+            ${sql.param(kinds)}::text[],
+            ${sql.param(tracked)}::boolean[]
+          ) as held(hour, kind, track_opens)
+        ),
+        corrected as (
+          update ${stats} as stats
+          set ${counterList((counter) => sql`${sql.identifier(counter)} = coalesce(fresh.${sql.identifier(counter)}, 0)`)}
+          from locked
+          left join fresh
+            on fresh.hour = locked.hour
+            and fresh.kind = locked.kind
+            and fresh.track_opens = locked.track_opens
+          where stats.workspace_id = ${workspaceId}
+            and stats.hour = locked.hour
+            and stats.kind = locked.kind
+            and stats.track_opens = locked.track_opens
+            and (${counterList((counter) => sql`stats.${sql.identifier(counter)}`)})
+              is distinct from
+              (${counterList((counter) => sql`coalesce(fresh.${sql.identifier(counter)}, 0)`)})
+          returning 1
+        ),
+        added as (
+          insert into ${stats} (workspace_id, hour, kind, track_opens, ${counterList((counter) => sql`${sql.identifier(counter)}`)})
+          select ${workspaceId}::uuid, hour, kind, track_opens, ${counterList((counter) => sql`${sql.identifier(counter)}`)}
+          from fresh
+          on conflict do nothing
+          returning 1
+        )
+        select
+          (select count(*) from corrected)::int as corrected,
+          (select count(*) from added)::int as added
+      `);
+      const [row] = result.rows;
+      return { corrected: row?.corrected ?? 0, added: row?.added ?? 0 };
+    });
+  }
+
+  async listHourlyStatsWorkspaces(window: { from: Date; to: Date }) {
+    const rows = await this.db
+      .selectDistinct({ workspaceId: messageHourlyStats.workspaceId })
+      .from(messageHourlyStats)
+      .where(
+        and(
+          gte(messageHourlyStats.hour, window.from),
+          lt(messageHourlyStats.hour, window.to),
+        ),
+      );
+    return rows.map((row) => row.workspaceId);
+  }
+
+  async nextWorkspaceWithMessages(after: string | null) {
+    const [row] = await this.db
+      .select({ workspaceId: messages.workspaceId })
+      .from(messages)
+      .where(after ? sql`${messages.workspaceId} > ${after}::uuid` : undefined)
+      .orderBy(messages.workspaceId)
+      .limit(1);
+    return row?.workspaceId ?? null;
+  }
+
+  async firstMessageAt(workspaceId: string, from: Date) {
+    const [row] = await this.db
+      .select({ createdAt: messages.createdAt })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.workspaceId, workspaceId),
+          gte(messages.createdAt, from),
+        ),
+      )
+      .orderBy(messages.createdAt)
+      .limit(1);
+    return row?.createdAt ?? null;
+  }
+
+  async deleteHourlyStatsBefore(before: Date, limit: number) {
+    const result = await this.db.execute(sql`
+      delete from ${messageHourlyStats} as stats
+      where (stats.workspace_id, stats.hour, stats.kind, stats.track_opens) in (
+        select workspace_id, hour, kind, track_opens
+        from ${messageHourlyStats}
+        where hour < ${timestamp(before)}
+        order by hour
+        limit ${limit}
+      )
+    `);
+    return result.rowCount ?? 0;
   }
 
   async hourlyByKind(
@@ -465,6 +896,54 @@ export class DispatchRepository {
       )
       .limit(1);
     return row !== undefined;
+  }
+
+  listConnectedSources(workspaceIds?: string[]) {
+    return this.db
+      .select({
+        workspaceId: sendingSources.workspaceId,
+        sourceId: sendingSources.id,
+        integrationType: sendingSources.integrationType,
+      })
+      .from(sendingSources)
+      .where(
+        and(
+          sql`${sendingSources.status} <> 'disconnected'`,
+          workspaceIds
+            ? sql`${sendingSources.workspaceId} = any(${sql.param(workspaceIds)}::uuid[])`
+            : undefined,
+        ),
+      );
+  }
+
+  async filterRecentSenders(
+    candidates: { workspaceId: string; sourceId: string }[],
+    since: Date,
+    kinds: string[],
+  ) {
+    if (candidates.length === 0 || kinds.length === 0) {
+      return [];
+    }
+    const result = await this.db.execute<{
+      workspaceId: string;
+      sourceId: string;
+    }>(sql`
+      select candidate.workspace_id as "workspaceId", candidate.source_id as "sourceId"
+      from unnest(
+        ${sql.param(candidates.map((candidate) => candidate.workspaceId))}::uuid[],
+        ${sql.param(candidates.map((candidate) => candidate.sourceId))}::uuid[]
+      ) as candidate(workspace_id, source_id)
+      where exists (
+        select 1
+        from "messages"
+        where "messages"."workspace_id" = candidate.workspace_id
+          and "messages"."source_id" = candidate.source_id
+          and "messages"."created_at" >= ${timestamp(since)}
+          and "messages"."kind" = any(${sql.param(kinds)}::text[])
+      )
+      order by 1, 2
+    `);
+    return result.rows;
   }
 
   async listEvents(
@@ -526,10 +1005,37 @@ export class DispatchRepository {
     return row ?? null;
   }
 
-  async deleteIdempotencyKeysBefore(before: Date) {
-    await this.db
-      .delete(messageIdempotencyKeys)
-      .where(lt(messageIdempotencyKeys.createdAt, before));
+  async deleteIdempotencyKeys(
+    scope: { from: Date | null; before: Date; bulk: boolean },
+    limit: number,
+  ) {
+    const keys = messageIdempotencyKeys;
+    const result = await this.db.execute<{ count: number; last: Date | null }>(
+      sql`
+        with expired as (
+          select workspace_id, key
+          from ${keys}
+          where ${keys.createdAt} < ${timestamp(scope.before)}
+            ${scope.from ? sql`and ${keys.createdAt} >= ${timestamp(scope.from)}` : sql``}
+            ${scope.bulk ? sql`` : sql`and not (${bulkIdempotencyKey})`}
+          order by ${keys.createdAt}
+          limit ${limit}
+        ),
+        removed as (
+          delete from ${keys} as stored
+          using expired
+          where stored.workspace_id = expired.workspace_id
+            and stored.key = expired.key
+          returning stored.created_at
+        )
+        select count(*)::int as count, max(created_at) as last from removed
+      `,
+    );
+    const [row] = result.rows;
+    return {
+      count: row?.count ?? 0,
+      last: row?.last ? new Date(row.last) : null,
+    };
   }
 
   async findMessage(id: string, createdAt: Date) {
@@ -559,6 +1065,33 @@ export class DispatchRepository {
           eq(messages.workspaceId, workspaceId),
         ),
       )
+      .limit(1);
+    return row ? this.flatten(row) : null;
+  }
+
+  async findListedByAssignedId(
+    workspaceId: string,
+    rfcMessageId: string,
+    providerMessageId: string,
+  ) {
+    const [row] = await this.db
+      .select(listColumns)
+      .from(messages)
+      .innerJoin(
+        sendingSources,
+        and(
+          eq(sendingSources.workspaceId, messages.workspaceId),
+          eq(sendingSources.id, messages.sourceId),
+        ),
+      )
+      .where(
+        and(
+          eq(sendingSources.workspaceId, workspaceId),
+          eq(messages.providerMessageId, providerMessageId),
+          eq(messages.rfcMessageId, rfcMessageId),
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
       .limit(1);
     return row ? this.flatten(row) : null;
   }

@@ -5,17 +5,33 @@ import {
   type Credentials,
   type IntegrationAdapter,
   IntegrationError,
+  type OAuthConnection,
+  type OAuthSupport,
   type OutboundMessage,
   type ProviderEvent,
   type SendResult,
   type SourceSettings,
   toIntegrationError,
 } from "@workspace/integration-core";
+import {
+  isStandardTopicArn,
+  type SesAdapter,
+} from "@workspace/integration-ses";
 import type { Env } from "../../config/env";
 import { REDIS, type Redis } from "../../infra/redis/redis.module";
 import { AdapterRegistry } from "./adapter-registry";
 import { apiError, integrationApiError } from "./api-error";
 import { CredentialsService } from "./credentials.service";
+import {
+  awsRegionPattern,
+  configurationSetHeader,
+  configurationSetPattern,
+  hasReadScope,
+  isMailboxProvider,
+  type MailboxProvider,
+  mailboxProviderNames,
+  mailboxProviders,
+} from "./mailbox-providers";
 import { SendCounter } from "./send-counter";
 import {
   type DailyStatsRow,
@@ -51,10 +67,48 @@ export type SendingSourceDto = {
   details: {
     permission?: "full" | "sending";
     domains?: { name: string; status: string }[];
-    webhook?: "registered" | "not_registered";
+    webhook?: "registered" | "pending" | "not_registered";
+    account?: {
+      region: string;
+      sandbox: boolean;
+      sendingEnabled: boolean;
+      quota: {
+        max24HourSend: number | null;
+        maxSendRate: number | null;
+        sentLast24Hours: number | null;
+      };
+      configurationSet: string | null;
+    };
+    identities?: SourceIdentity[];
+    identitiesTruncated?: boolean;
+    events?: {
+      webhookUrl: string | null;
+      topicArn: string | null;
+      destination: "configured" | "manual" | null;
+    };
   };
+  replyDetection: ReplyDetectionState;
   health: HealthDay[];
 };
+
+export type SourceIdentity = {
+  name: string;
+  type: "email" | "domain";
+  verified: boolean;
+  status: string;
+};
+
+export type ReplyDetectionState =
+  | "on"
+  | "off"
+  | "not_enabled"
+  | "always"
+  | "unsupported";
+
+type ReplyDetectionSource = Pick<
+  SendingSourceDto,
+  "integrationType" | "replyDetection"
+>;
 
 export type SourcePatch = {
   name?: string;
@@ -64,12 +118,12 @@ export type SourcePatch = {
 };
 
 export type WebhookResult =
-  | { outcome: "not_found" | "rejected" | "duplicate" }
+  | { outcome: "not_found" | "rejected" | "unavailable" }
   | {
       outcome: "accepted";
       workspaceId: string;
       sourceId: string;
-      event: ProviderEvent;
+      events: ProviderEvent[];
     };
 
 export class SourceUnavailableError extends Error {
@@ -124,15 +178,28 @@ type OAuthState = {
   userId: string;
   codeVerifier: string;
   dailySendLimit: number | null;
+  replyDetectionFor?: string;
 };
 
-export type GmailCallbackOutcome =
-  | { connected: true }
-  | { connected: false; code: string };
+export type OAuthCallbackOutcome =
+  | { ok: true; result: "connected" | "reply_detection" }
+  | { ok: false; code: string };
 
-function oauthStateKey(state: string) {
+function oauthStateKey(provider: MailboxProvider, state: string) {
   const digest = createHash("sha256").update(state).digest("hex");
-  return `opencadence:oauth:gmail:${digest}`;
+  return `opencadence:oauth:${provider}:${digest}`;
+}
+
+function hasSns(adapter: IntegrationAdapter): adapter is SesAdapter {
+  return typeof (adapter as Partial<SesAdapter>).sns?.receive === "function";
+}
+
+function text(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function numberOrNull(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function daysBack(count: number) {
@@ -181,9 +248,205 @@ export class SendingSourcesService {
 
   async list(workspaceId: string) {
     const rows = await this.repository.listSources(workspaceId);
+    const connectable = {} as Record<MailboxProvider, boolean>;
+    const replyDetection = {} as Record<MailboxProvider, boolean>;
+    const redirectUris = {} as Record<MailboxProvider, string>;
+    for (const provider of mailboxProviderNames) {
+      const adapter = this.adapters.find(provider);
+      connectable[provider] = Boolean(adapter?.oauth);
+      replyDetection[provider] = Boolean(adapter?.inbox?.listReceived);
+      redirectUris[provider] = this.redirectUri(provider);
+    }
     return {
       sources: await this.toDtos(workspaceId, rows),
-      connectable: { gmail: this.adapters.has("gmail") },
+      connectable,
+      replyDetection,
+      redirectUris,
+    };
+  }
+
+  async connectSes(actor: Actor, input: Record<string, unknown>) {
+    const adapter = this.requireAdapter("ses");
+    const name = this.validName(input.name);
+    const accessKeyId = text(input.accessKeyId);
+    if (accessKeyId === "") {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "validation",
+        "Paste the access key ID of the IAM user.",
+        "accessKeyId",
+      );
+    }
+    const secretAccessKey = text(input.secretAccessKey);
+    if (secretAccessKey === "") {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "validation",
+        "Paste the secret access key of the IAM user.",
+        "secretAccessKey",
+      );
+    }
+    const region = text(input.region).toLowerCase();
+    if (!awsRegionPattern.test(region)) {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "validation",
+        "Choose the AWS region your Amazon SES account sends from, such as us-east-1.",
+        "region",
+      );
+    }
+    const configurationSet = text(input.configurationSet);
+    if (
+      configurationSet !== "" &&
+      !configurationSetPattern.test(configurationSet)
+    ) {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "validation",
+        "A configuration set name can use up to 64 letters, numbers, hyphens, and underscores.",
+        "configurationSet",
+      );
+    }
+    const topicArn = text(input.topicArn);
+    if (topicArn !== "" && !isStandardTopicArn(topicArn)) {
+      throw this.invalidTopic();
+    }
+    const dailySendLimit =
+      input.dailySendLimit === undefined || input.dailySendLimit === null
+        ? null
+        : this.validLimit(input.dailySendLimit);
+
+    const credentials: Credentials = {
+      kind: "access_key",
+      accessKeyId,
+      secretAccessKey,
+      region,
+    };
+    let settings: SourceSettings;
+    try {
+      settings = (await adapter.verify(credentials)).settings;
+    } catch (error) {
+      const failure = toIntegrationError(error);
+      throw integrationApiError(
+        failure,
+        failure.code === "invalid_credentials"
+          ? "accessKeyId"
+          : failure.code === "validation"
+            ? "region"
+            : undefined,
+      );
+    }
+
+    const id = randomUUID();
+    await this.insert(actor, {
+      id,
+      integrationType: adapter.type,
+      name,
+      settings: {
+        ...settings,
+        configurationSet: configurationSet === "" ? null : configurationSet,
+        webhook: "not_registered",
+      },
+      credentials,
+      dailySendLimit,
+    });
+    if (topicArn !== "") {
+      await this.setEventTopic(actor, id, { topicArn });
+    }
+    return this.dto(actor.workspaceId, id);
+  }
+
+  async setEventTopic(actor: Actor, id: string, input: { topicArn: unknown }) {
+    const source = await this.requireSource(actor.workspaceId, id);
+    const adapter = this.requireAdapter(source.integrationType);
+    if (!hasSns(adapter)) {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "not_supported",
+        "This kind of sending source does not receive events through an SNS topic.",
+      );
+    }
+    const topicArn = text(input.topicArn);
+    if (!isStandardTopicArn(topicArn)) {
+      throw this.invalidTopic();
+    }
+    const row = await this.repository.findCredentials(id);
+    if (!row) {
+      throw this.notFound();
+    }
+
+    const configurationSet = text(source.settings.configurationSet);
+    let destination: "configured" | "manual" = "manual";
+    let failure: IntegrationError | null = null;
+    if (configurationSet !== "") {
+      try {
+        await adapter.ensureEventDestination(this.credentials.open(row), {
+          configurationSetName: configurationSet,
+          topicArn,
+        });
+        destination = "configured";
+      } catch (error) {
+        failure = toIntegrationError(error);
+      }
+    }
+
+    const unchanged =
+      source.settings.topicArn === topicArn &&
+      source.settings.webhook === "registered";
+    await this.repository.transaction(async (tx) => {
+      await this.repository.updateCredentials(
+        id,
+        {
+          webhookExternalId: topicArn,
+          webhookSecretCiphertext: this.credentials.sealWebhookSecret(
+            row,
+            topicArn,
+          ),
+        },
+        tx,
+      );
+      await this.repository.updateSource(
+        actor.workspaceId,
+        id,
+        {
+          settings: {
+            ...source.settings,
+            topicArn,
+            eventDestination: destination,
+            webhook: unchanged ? "registered" : "pending",
+          },
+        },
+        tx,
+      );
+      await this.repository.insertEvent(
+        {
+          workspaceId: actor.workspaceId,
+          sourceId: id,
+          severity: 1,
+          type: "event_topic_saved",
+          actorUserId: actor.userId,
+        },
+        tx,
+      );
+      if (failure) {
+        await this.repository.insertEvent(
+          {
+            workspaceId: actor.workspaceId,
+            sourceId: id,
+            severity: 2,
+            type: "event_destination_failed",
+            code: failure.code,
+            message: failure.message,
+            actorUserId: actor.userId,
+          },
+          tx,
+        );
+      }
+    });
+    return {
+      source: await this.dto(actor.workspaceId, id),
+      destination,
+      error: failure ? { code: failure.code, message: failure.message } : null,
     };
   }
 
@@ -304,85 +567,145 @@ export class SendingSourcesService {
   }
 
   hasInbox(integrationType: string) {
-    return Boolean(this.adapters.find(integrationType)?.inbox);
+    const adapter = this.adapters.find(integrationType);
+    return Boolean(adapter?.inbox && adapter.capabilities.includes("warmup"));
   }
 
-  canDetectReplies(integrationType: string) {
+  readsMail(integrationType: string) {
     return Boolean(this.adapters.find(integrationType)?.inbox?.listReceived);
   }
 
-  async gmailAuthorizeUrl(actor: Actor, input: { dailySendLimit?: unknown }) {
-    const adapter = this.adapters.find("gmail");
-    if (!adapter?.oauth) {
-      throw apiError(
-        HttpStatus.BAD_REQUEST,
-        "gmail_not_configured",
-        "Gmail is not set up on this server. Add a Google OAuth client to the server configuration first.",
-      );
-    }
-    if (!actor.userId) {
-      throw apiError(
-        HttpStatus.FORBIDDEN,
-        "session_required",
-        "Connect a mailbox while signed in. An API key cannot approve access on Google.",
-      );
-    }
-
-    const dailySendLimit =
-      input.dailySendLimit === undefined
-        ? null
-        : this.validLimit(input.dailySendLimit);
-    const state = randomBytes(32).toString("base64url");
-    const codeVerifier = randomBytes(48).toString("base64url");
-    const stored: OAuthState = {
-      workspaceId: actor.workspaceId,
-      userId: actor.userId,
-      codeVerifier,
-      dailySendLimit,
-    };
-    await this.redis.set(
-      oauthStateKey(state),
-      JSON.stringify(stored),
-      "EX",
-      oauthStateTtlSeconds,
-      "NX",
+  canDetectReplies(source: ReplyDetectionSource) {
+    return (
+      this.readsMail(source.integrationType) &&
+      (source.replyDetection === "on" || source.replyDetection === "always")
     );
-
-    return {
-      url: adapter.oauth.authorizationUrl({
-        state,
-        redirectUri: this.gmailRedirectUri(),
-        codeChallenge: createHash("sha256")
-          .update(codeVerifier)
-          .digest("base64url"),
-      }),
-    };
   }
 
-  async gmailCallback(
+  async authorizeUrl(
+    provider: MailboxProvider,
+    actor: Actor,
+    input: { dailySendLimit?: unknown },
+  ) {
+    const { label, company, setup } = mailboxProviders[provider];
+    const oauth = this.adapters.oauth(provider, "send");
+    if (!oauth) {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        `${provider}_not_configured`,
+        `${label} is not set up on this server. ${setup}`,
+      );
+    }
+    const userId = this.requireUser(actor, company);
+    const dailySendLimit =
+      input.dailySendLimit === undefined || input.dailySendLimit === null
+        ? null
+        : this.validLimit(input.dailySendLimit);
+    return this.startOAuth(provider, oauth, {
+      workspaceId: actor.workspaceId,
+      userId,
+      dailySendLimit,
+    });
+  }
+
+  async replyDetectionAuthorizeUrl(actor: Actor, id: string) {
+    const source = await this.requireSource(actor.workspaceId, id);
+    const provider = source.integrationType;
+    if (!isMailboxProvider(provider)) {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "not_supported",
+        this.readsMail(provider)
+          ? "This source already reads its inbox, so replies are detected without an extra permission."
+          : "This kind of sending source cannot read an inbox, so it cannot detect replies.",
+      );
+    }
+    const { label, company } = mailboxProviders[provider];
+    const oauth = this.adapters.oauth(provider, "inbox");
+    if (!oauth) {
+      throw apiError(
+        HttpStatus.CONFLICT,
+        "reply_detection_disabled",
+        `Reply detection for ${label} is not enabled on this server. Connect the mailbox with IMAP/SMTP and an app password to detect replies.`,
+      );
+    }
+    const userId = this.requireUser(actor, company);
+    return this.startOAuth(
+      provider,
+      oauth,
+      {
+        workspaceId: actor.workspaceId,
+        userId,
+        dailySendLimit: null,
+        replyDetectionFor: source.id,
+      },
+      source.email ?? undefined,
+    );
+  }
+
+  async disableReplyDetection(actor: Actor, id: string) {
+    const source = await this.requireSource(actor.workspaceId, id);
+    if (!isMailboxProvider(source.integrationType)) {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        "not_supported",
+        "Reply detection cannot be turned off for this kind of sending source.",
+      );
+    }
+    if (source.settings.replyDetection === true) {
+      await this.repository.transaction(async (tx) => {
+        await this.repository.updateSource(
+          actor.workspaceId,
+          id,
+          { settings: { ...source.settings, replyDetection: false } },
+          tx,
+        );
+        await this.repository.insertEvent(
+          {
+            workspaceId: actor.workspaceId,
+            sourceId: id,
+            severity: 1,
+            type: "reply_detection_disabled",
+            actorUserId: actor.userId,
+          },
+          tx,
+        );
+      });
+    }
+    return this.dto(actor.workspaceId, id);
+  }
+
+  async oauthCallback(
+    provider: MailboxProvider,
     userId: string | null,
     query: { code?: string; state?: string; error?: string },
-  ): Promise<GmailCallbackOutcome> {
-    const adapter = this.adapters.find("gmail");
-    if (!adapter?.oauth) {
-      return { connected: false, code: "not_configured" };
+  ): Promise<OAuthCallbackOutcome> {
+    if (!this.adapters.oauth(provider, "send")) {
+      return { ok: false, code: "not_configured" };
     }
     if (!query.state) {
-      return { connected: false, code: "state_expired" };
+      return { ok: false, code: "state_expired" };
     }
-    const raw = await this.redis.getdel(oauthStateKey(query.state));
+    const raw = await this.redis.getdel(oauthStateKey(provider, query.state));
     if (!raw) {
-      return { connected: false, code: "state_expired" };
+      return { ok: false, code: "state_expired" };
     }
     const stored = JSON.parse(raw) as OAuthState;
     if (!userId || userId !== stored.userId) {
-      return { connected: false, code: "failed" };
+      return { ok: false, code: "failed" };
     }
     if (query.error || !query.code) {
       return {
-        connected: false,
+        ok: false,
         code: query.error === "access_denied" ? "access_denied" : "failed",
       };
+    }
+    const oauth = this.adapters.oauth(
+      provider,
+      stored.replyDetectionFor ? "inbox" : "send",
+    );
+    if (!oauth) {
+      return { ok: false, code: "reply_detection_disabled" };
     }
 
     const actor: Actor = {
@@ -391,19 +714,27 @@ export class SendingSourcesService {
     };
 
     try {
-      const connection = await adapter.oauth.exchangeCode({
+      const connection = await oauth.exchangeCode({
         code: query.code,
-        redirectUri: this.gmailRedirectUri(),
+        redirectUri: this.redirectUri(provider),
         codeVerifier: stored.codeVerifier,
       });
+      if (stored.replyDetectionFor) {
+        return await this.finishReplyDetection(
+          provider,
+          actor,
+          stored.replyDetectionFor,
+          connection,
+        );
+      }
       const { externalId, email } = connection.account;
       if (!externalId || !email) {
-        return { connected: false, code: "failed" };
+        return { ok: false, code: "failed" };
       }
 
       const existing = await this.repository.findSourceByAccount(
         actor.workspaceId,
-        adapter.type,
+        provider,
         externalId,
       );
       if (existing) {
@@ -441,11 +772,11 @@ export class SendingSourcesService {
             tx,
           );
         });
-        return { connected: true };
+        return { ok: true, result: "connected" };
       }
 
       const base = {
-        integrationType: adapter.type,
+        integrationType: provider,
         settings: connection.settings,
         credentials: connection.credentials,
         dailySendLimit: stored.dailySendLimit,
@@ -461,23 +792,128 @@ export class SendingSourcesService {
         await this.insert(actor, {
           ...base,
           id: randomUUID(),
-          name: `${email} (Gmail)`,
+          name: `${email} (${mailboxProviders[provider].label})`,
         });
       }
-      return { connected: true };
+      return { ok: true, result: "connected" };
     } catch (error) {
       if (error instanceof IntegrationError) {
         return {
-          connected: false,
+          ok: false,
           code:
             error.code === "insufficient_permission"
               ? "missing_scope"
               : "failed",
         };
       }
-      this.logger.error("Gmail connection failed.", error);
-      return { connected: false, code: "failed" };
+      this.logger.error(
+        `${mailboxProviders[provider].label} connection failed.`,
+        error,
+      );
+      return { ok: false, code: "failed" };
     }
+  }
+
+  private async finishReplyDetection(
+    provider: MailboxProvider,
+    actor: Actor,
+    sourceId: string,
+    connection: OAuthConnection,
+  ): Promise<OAuthCallbackOutcome> {
+    const source = await this.repository.findSource(
+      actor.workspaceId,
+      sourceId,
+    );
+    if (!source || source.integrationType !== provider) {
+      return { ok: false, code: "source_missing" };
+    }
+    if (
+      !connection.account.externalId ||
+      connection.account.externalId !== source.externalAccountId
+    ) {
+      return { ok: false, code: "account_mismatch" };
+    }
+    const granted = hasReadScope(provider, connection.credentials.scopes);
+    await this.repository.transaction(async (tx) => {
+      await this.repository.replaceCredentials(
+        this.credentials.seal({
+          sourceId: source.id,
+          workspaceId: actor.workspaceId,
+          credentials: connection.credentials,
+        }),
+        tx,
+      );
+      await this.repository.updateSource(
+        actor.workspaceId,
+        source.id,
+        {
+          settings: {
+            ...source.settings,
+            ...connection.settings,
+            replyDetection: granted,
+          },
+          status: source.pausedAt ? "paused" : "active",
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          lastErrorAt: null,
+          lastVerifiedAt: new Date(),
+        },
+        tx,
+      );
+      await this.repository.insertEvent(
+        {
+          workspaceId: actor.workspaceId,
+          sourceId: source.id,
+          severity: granted ? 1 : 2,
+          type: granted
+            ? "reply_detection_enabled"
+            : "reply_detection_not_granted",
+          actorUserId: actor.userId,
+        },
+        tx,
+      );
+    });
+    return granted
+      ? { ok: true, result: "reply_detection" }
+      : { ok: false, code: "read_scope_not_granted" };
+  }
+
+  private requireUser(actor: Actor, company: string) {
+    if (!actor.userId) {
+      throw apiError(
+        HttpStatus.FORBIDDEN,
+        "session_required",
+        `Connect a mailbox while signed in. An API key cannot approve access on ${company}.`,
+      );
+    }
+    return actor.userId;
+  }
+
+  private async startOAuth(
+    provider: MailboxProvider,
+    oauth: OAuthSupport,
+    stored: Omit<OAuthState, "codeVerifier">,
+    loginHint?: string,
+  ) {
+    const state = randomBytes(32).toString("base64url");
+    const codeVerifier = randomBytes(48).toString("base64url");
+    await this.redis.set(
+      oauthStateKey(provider, state),
+      JSON.stringify({ ...stored, codeVerifier } satisfies OAuthState),
+      "EX",
+      oauthStateTtlSeconds,
+      "NX",
+    );
+    return {
+      url: oauth.authorizationUrl({
+        state,
+        redirectUri: this.redirectUri(provider),
+        codeChallenge: createHash("sha256")
+          .update(codeVerifier)
+          .digest("base64url"),
+        loginHint,
+      }),
+    };
   }
 
   async update(actor: Actor, id: string, patch: SourcePatch) {
@@ -690,7 +1126,8 @@ export class SendingSourcesService {
       const result = await this.withCredentials(
         source,
         adapter,
-        (credentials) => adapter.send(credentials, message),
+        (credentials) =>
+          adapter.send(credentials, this.outgoing(source, adapter, message)),
       );
       await this.repository.insertEvent({
         workspaceId: actor.workspaceId,
@@ -723,7 +1160,9 @@ export class SendingSourcesService {
         if (adapter.webhooks && row.webhookExternalId) {
           await adapter.webhooks.unregister(credentials, row.webhookExternalId);
         }
-        const shared = this.config.get("GMAIL_CLIENT_SHARED", { infer: true });
+        const shared =
+          source.integrationType === "gmail" &&
+          this.config.get("GMAIL_CLIENT_SHARED", { infer: true });
         if (adapter.oauth && credentials.kind === "oauth2" && !shared) {
           await adapter.oauth.revoke(credentials);
         }
@@ -819,11 +1258,7 @@ export class SendingSourcesService {
     }
     const source = await this.repository.findSourceById(sourceId);
     const adapter = this.adapters.find(integrationType);
-    if (
-      !source ||
-      source.integrationType !== integrationType ||
-      !adapter?.webhooks
-    ) {
+    if (!source || source.integrationType !== integrationType || !adapter) {
       return { outcome: "not_found" };
     }
     const row = await this.repository.findCredentials(sourceId);
@@ -832,45 +1267,107 @@ export class SendingSourcesService {
       return { outcome: "not_found" };
     }
 
-    let event: ReturnType<NonNullable<IntegrationAdapter["webhooks"]>["parse"]>;
-    try {
-      event = adapter.webhooks.parse({ rawBody, headers, signingSecret });
-    } catch {
-      return { outcome: "rejected" };
+    let events: ProviderEvent[];
+    if (hasSns(adapter)) {
+      const received = await this.receiveSns(
+        adapter,
+        source,
+        rawBody,
+        signingSecret,
+      );
+      if (!Array.isArray(received)) {
+        return received;
+      }
+      events = received;
+    } else if (adapter.webhooks) {
+      try {
+        events = [adapter.webhooks.parse({ rawBody, headers, signingSecret })];
+      } catch {
+        return { outcome: "rejected" };
+      }
+    } else {
+      return { outcome: "not_found" };
     }
 
-    const fresh = await this.repository.insertWebhookReceipt(
-      source.workspaceId,
-      sourceId,
-      event.id,
-    );
-    if (!fresh) {
-      return { outcome: "duplicate" };
+    const fresh: ProviderEvent[] = [];
+    for (const event of events) {
+      const first = await this.repository.insertWebhookReceipt(
+        source.workspaceId,
+        sourceId,
+        event.id,
+      );
+      if (!first) {
+        continue;
+      }
+      const serious =
+        event.type === "complained" ||
+        event.type === "failed" ||
+        (event.type === "bounced" && event.bounce?.permanent !== false);
+      await this.repository.insertEvent({
+        workspaceId: source.workspaceId,
+        sourceId,
+        severity: serious ? 2 : 1,
+        type: "provider_event",
+        code: event.type,
+        message: event.bounce?.message ?? event.reason ?? null,
+        metadata: {
+          rawType: event.rawType,
+          providerMessageId: event.providerMessageId ?? null,
+          recipientCount: event.recipients.length,
+        },
+      });
+      fresh.push(event);
     }
-
-    const serious =
-      event.type === "complained" ||
-      event.type === "failed" ||
-      (event.type === "bounced" && event.bounce?.permanent !== false);
-    await this.repository.insertEvent({
-      workspaceId: source.workspaceId,
-      sourceId,
-      severity: serious ? 2 : 1,
-      type: "provider_event",
-      code: event.type,
-      message: event.bounce?.message ?? event.reason ?? null,
-      metadata: {
-        rawType: event.rawType,
-        providerMessageId: event.providerMessageId ?? null,
-        recipientCount: event.recipients.length,
-      },
-    });
     return {
       outcome: "accepted",
       workspaceId: source.workspaceId,
       sourceId,
-      event,
+      events: fresh,
     };
+  }
+
+  private async receiveSns(
+    adapter: SesAdapter,
+    source: SourceRow,
+    rawBody: string,
+    topicArn: string,
+  ): Promise<ProviderEvent[] | WebhookResult> {
+    let outcome: Awaited<ReturnType<SesAdapter["sns"]["receive"]>>;
+    try {
+      outcome = await adapter.sns.receive({ rawBody, topicArn });
+    } catch (error) {
+      return {
+        outcome:
+          toIntegrationError(error).code === "temporary"
+            ? "unavailable"
+            : "rejected",
+      };
+    }
+    if (outcome.kind === "events") {
+      return outcome.events;
+    }
+    const confirmed = outcome.kind === "subscription_confirmed";
+    const webhook = confirmed ? "registered" : "not_registered";
+    if (source.settings.webhook !== webhook) {
+      await this.repository.transaction(async (tx) => {
+        await this.repository.updateSource(
+          source.workspaceId,
+          source.id,
+          { settings: { ...source.settings, webhook } },
+          tx,
+        );
+        await this.repository.insertEvent(
+          {
+            workspaceId: source.workspaceId,
+            sourceId: source.id,
+            severity: confirmed ? 1 : 2,
+            type: confirmed ? "webhook_registered" : "webhook_unsubscribed",
+          },
+          tx,
+        );
+      });
+    }
+    return [];
   }
 
   async resolveForSend(workspaceId: string, sourceId?: string) {
@@ -940,7 +1437,7 @@ export class SendingSourcesService {
 
     try {
       return await this.withCredentials(source, adapter, (credentials) =>
-        adapter.send(credentials, message),
+        adapter.send(credentials, this.outgoing(source, adapter, message)),
       );
     } catch (error) {
       await this.counter.release(sourceId);
@@ -1178,10 +1675,19 @@ export class SendingSourcesService {
     const ids = rows.map((row) => row.id);
     const days = daysBack(healthDays);
     const today = days.at(-1) ?? utcDay();
-    const [stats, counts] = await Promise.all([
+    const [stats, counts, scopeRows] = await Promise.all([
       this.repository.listDailyStats(workspaceId, ids, days[0] ?? today),
       this.counter.today(ids),
+      this.repository.listScopes(
+        rows
+          .filter((row) => isMailboxProvider(row.integrationType))
+          .map((row) => row.id),
+      ),
     ]);
+    const scopesById = new Map(
+      scopeRows.map((row) => [row.sourceId, row.scopes ?? []]),
+    );
+    const webhookBase = this.config.get("WEBHOOK_BASE_URL", { infer: true });
     const statsByKey = new Map<string, DailyStatsRow>(
       stats.map((stat) => [`${stat.sourceId}:${stat.day}`, stat]),
     );
@@ -1199,9 +1705,15 @@ export class SendingSourcesService {
         }
         return { day, health: stat.health as HealthDay["health"], sent };
       });
-      const settings = row.settings as SendingSourceDto["details"] & {
+      const settings = row.settings as {
+        permission?: "full" | "sending";
+        webhook?: SendingSourceDto["details"]["webhook"];
         domains?: { name?: unknown; status?: unknown }[];
-      };
+        identities?: Record<string, unknown>[];
+        quota?: Record<string, unknown>;
+      } & Record<string, unknown>;
+      const adapter = this.adapters.find(row.integrationType);
+      const sns = adapter ? hasSns(adapter) : false;
 
       return {
         id: row.id,
@@ -1231,17 +1743,97 @@ export class SendingSourcesService {
               }))
             : undefined,
           webhook: settings.webhook,
+          account:
+            typeof settings.region === "string"
+              ? {
+                  region: settings.region,
+                  sandbox: settings.sandbox === true,
+                  sendingEnabled: settings.sendingEnabled === true,
+                  quota: {
+                    max24HourSend: numberOrNull(settings.quota?.max24HourSend),
+                    maxSendRate: numberOrNull(settings.quota?.maxSendRate),
+                    sentLast24Hours: numberOrNull(
+                      settings.quota?.sentLast24Hours,
+                    ),
+                  },
+                  configurationSet: text(settings.configurationSet) || null,
+                }
+              : undefined,
+          identities: Array.isArray(settings.identities)
+            ? settings.identities.map((identity) => ({
+                name: String(identity.name ?? ""),
+                type: identity.type === "email" ? "email" : "domain",
+                verified: identity.verified === true,
+                status: String(identity.verificationStatus ?? ""),
+              }))
+            : undefined,
+          identitiesTruncated:
+            settings.identitiesTruncated === true ? true : undefined,
+          events: sns
+            ? {
+                webhookUrl: webhookBase
+                  ? `${webhookBase}/api/v1/provider-webhooks/${row.integrationType}/${row.id}`
+                  : null,
+                topicArn: text(settings.topicArn) || null,
+                destination:
+                  settings.eventDestination === "configured" ||
+                  settings.eventDestination === "manual"
+                    ? settings.eventDestination
+                    : null,
+              }
+            : undefined,
         },
+        replyDetection: this.replyDetection(
+          row,
+          adapter,
+          scopesById.get(row.id) ?? [],
+        ),
         health,
       };
     });
   }
 
-  private gmailRedirectUri() {
+  private replyDetection(
+    row: SourceRow,
+    adapter: IntegrationAdapter | null,
+    scopes: string[],
+  ): ReplyDetectionState {
+    const reads = Boolean(adapter?.inbox?.listReceived);
+    if (!isMailboxProvider(row.integrationType)) {
+      return reads ? "always" : "unsupported";
+    }
+    if (!reads) {
+      return "not_enabled";
+    }
+    return row.settings.replyDetection === true &&
+      hasReadScope(row.integrationType, scopes)
+      ? "on"
+      : "off";
+  }
+
+  private outgoing(
+    source: SourceRow,
+    adapter: IntegrationAdapter,
+    message: OutboundMessage,
+  ): OutboundMessage {
+    const configurationSet = text(source.settings.configurationSet);
+    if (!hasSns(adapter) || configurationSet === "") {
+      return message;
+    }
+    return {
+      ...message,
+      headers: {
+        ...message.headers,
+        [configurationSetHeader]: configurationSet,
+      },
+    };
+  }
+
+  private redirectUri(provider: MailboxProvider) {
     const base = this.config
       .get("BETTER_AUTH_URL", { infer: true })
       .replace(/\/+$/, "");
-    return `${base}/api/v1/sending-sources/gmail/callback`;
+    return `${base}/api/v1/sending-sources/${provider}/callback`;
   }
 
   private requireAdapter(type: string) {
@@ -1271,6 +1863,15 @@ export class SendingSourcesService {
       HttpStatus.NOT_FOUND,
       "not_found",
       "This sending source does not exist in the workspace.",
+    );
+  }
+
+  private invalidTopic() {
+    return apiError(
+      HttpStatus.BAD_REQUEST,
+      "validation",
+      "Paste the ARN of a standard SNS topic, such as arn:aws:sns:us-east-1:123456789012:opencadence-events.",
+      "topicArn",
     );
   }
 

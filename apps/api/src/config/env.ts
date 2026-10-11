@@ -20,6 +20,11 @@ export type Env = {
   GMAIL_CLIENT_ID?: string;
   GMAIL_CLIENT_SECRET?: string;
   GMAIL_CLIENT_SHARED: boolean;
+  GMAIL_READ_SCOPE_ENABLED: boolean;
+  OUTLOOK_CLIENT_ID?: string;
+  OUTLOOK_CLIENT_SECRET?: string;
+  OUTLOOK_TENANT: string;
+  OUTLOOK_READ_SCOPE_ENABLED: boolean;
   WEBHOOK_BASE_URL?: string;
   MEDIA_BASE_URL: string;
   TRACKING_BASE_URL: string;
@@ -227,17 +232,25 @@ function forcePathStyle(config: Record<string, unknown>) {
   throw new Error('S3_FORCE_PATH_STYLE must be "true" or "false".');
 }
 
-function allowPrivateAiEndpoints(config: Record<string, unknown>) {
-  const raw = optional(config, "AI_ALLOW_PRIVATE_ENDPOINTS")
-    ?.trim()
-    .toLowerCase();
-  if (raw === undefined || raw === "false") {
-    return false;
+function flag(config: Record<string, unknown>, key: string, fallback: boolean) {
+  const raw = optional(config, key)?.trim().toLowerCase();
+  if (raw === undefined) {
+    return fallback;
   }
-  if (raw === "true") {
-    return true;
+  if (raw === "true" || raw === "false") {
+    return raw === "true";
   }
-  throw new Error('AI_ALLOW_PRIVATE_ENDPOINTS must be "true" or "false".');
+  throw new Error(`${key} must be "true" or "false".`);
+}
+
+function outlookTenant(config: Record<string, unknown>) {
+  const tenant = optional(config, "OUTLOOK_TENANT")?.trim() ?? "common";
+  if (!/^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(tenant)) {
+    throw new Error(
+      "OUTLOOK_TENANT must be common, organizations, consumers, a tenant ID, or a tenant domain.",
+    );
+  }
+  return tenant;
 }
 
 export function validateEnv(config: Record<string, unknown>) {
@@ -272,6 +285,14 @@ export function validateEnv(config: Record<string, unknown>) {
     googleClientId !== undefined &&
     googleClientSecret !== undefined;
 
+  const outlookClientId = optional(config, "OUTLOOK_CLIENT_ID")?.trim();
+  const outlookClientSecret = optional(config, "OUTLOOK_CLIENT_SECRET");
+  if ((outlookClientId === undefined) !== (outlookClientSecret === undefined)) {
+    throw new Error(
+      "OUTLOOK_CLIENT_ID and OUTLOOK_CLIENT_SECRET must be set together, or both left empty to leave Outlook mailboxes off.",
+    );
+  }
+
   const bullBoardUsername = optional(config, "BULL_BOARD_USERNAME");
   const bullBoardPassword = optional(config, "BULL_BOARD_PASSWORD");
   if ((bullBoardUsername === undefined) !== (bullBoardPassword === undefined)) {
@@ -303,6 +324,15 @@ export function validateEnv(config: Record<string, unknown>) {
       ? googleClientSecret
       : gmailClientSecret,
     GMAIL_CLIENT_SHARED: gmailClientShared,
+    GMAIL_READ_SCOPE_ENABLED: flag(config, "GMAIL_READ_SCOPE_ENABLED", false),
+    OUTLOOK_CLIENT_ID: outlookClientId,
+    OUTLOOK_CLIENT_SECRET: outlookClientSecret,
+    OUTLOOK_TENANT: outlookTenant(config),
+    OUTLOOK_READ_SCOPE_ENABLED: flag(
+      config,
+      "OUTLOOK_READ_SCOPE_ENABLED",
+      true,
+    ),
     WEBHOOK_BASE_URL: webhookBaseUrl(config),
     MEDIA_BASE_URL: mediaBaseUrl(config, required(config, "BETTER_AUTH_URL")),
     TRACKING_BASE_URL: trackingBaseUrl(
@@ -325,7 +355,11 @@ export function validateEnv(config: Record<string, unknown>) {
       optional(config, "MINIO_ROOT_PASSWORD") ??
       "opencadence",
     S3_FORCE_PATH_STYLE: forcePathStyle(config),
-    AI_ALLOW_PRIVATE_ENDPOINTS: allowPrivateAiEndpoints(config),
+    AI_ALLOW_PRIVATE_ENDPOINTS: flag(
+      config,
+      "AI_ALLOW_PRIVATE_ENDPOINTS",
+      false,
+    ),
   };
 
   return { ...config, ...env };

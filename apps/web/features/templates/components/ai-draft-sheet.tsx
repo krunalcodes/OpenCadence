@@ -37,7 +37,6 @@ import {
   segmentedItemClass,
 } from "@/components/product/styles";
 import { Spinner } from "@/components/spinner";
-import { useAiStream } from "@/features/templates/hooks/use-ai-stream";
 import {
   type DraftKind,
   type DraftTone,
@@ -57,6 +56,7 @@ import {
   htmlToPlainText,
 } from "@/features/templates/lib/document";
 import type { Editor } from "@/features/templates/lib/editor";
+import { useAiStream } from "@/hooks/use-ai-stream";
 import type { Brand } from "@/lib/brand";
 
 const text = copy.ai.draft;

@@ -4,6 +4,7 @@ import { Field, FieldError, FieldLabel } from "@workspace/ui/components/field";
 import { Input } from "@workspace/ui/components/input";
 import { Switch } from "@workspace/ui/components/switch";
 import { cn } from "@workspace/ui/lib/utils";
+import { DatePicker } from "@/components/pickers/date-picker";
 import { OptionCombobox } from "@/components/product/option-combobox";
 import { inputClass } from "@/components/product/styles";
 import {
@@ -99,6 +100,33 @@ export function CustomFieldControl({
     );
   }
 
+  if (field.type === "date") {
+    return (
+      <Field data-invalid={error ? true : undefined}>
+        <FieldLabel htmlFor={id} className={labelClass}>
+          {field.label}
+        </FieldLabel>
+        <DatePicker
+          id={id}
+          value={textValue === "" ? null : textValue}
+          label={field.label}
+          disabled={disabled}
+          clearable
+          captionLayout="dropdown"
+          invalid={error !== undefined}
+          describedBy={error ? errorId : undefined}
+          className="w-full"
+          onChange={(next) => onChange(next ?? "")}
+        />
+        {error ? (
+          <FieldError id={errorId} className={errorClass}>
+            {error}
+          </FieldError>
+        ) : null}
+      </Field>
+    );
+  }
+
   return (
     <Field data-invalid={error ? true : undefined}>
       <FieldLabel htmlFor={id} className={labelClass}>
@@ -106,7 +134,7 @@ export function CustomFieldControl({
       </FieldLabel>
       <Input
         id={id}
-        type={field.type === "date" ? "date" : "text"}
+        type="text"
         inputMode={field.type === "number" ? "decimal" : undefined}
         autoComplete="off"
         maxLength={field.type === "text" ? maxCustomTextLength : undefined}

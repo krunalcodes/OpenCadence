@@ -7,7 +7,11 @@ import {
   SuppressionService,
 } from "../suppression/suppression.service";
 
-export type WebhookOutcome = "accepted" | "not_found" | "rejected";
+export type WebhookOutcome =
+  | "accepted"
+  | "not_found"
+  | "rejected"
+  | "unavailable";
 
 @Injectable()
 export class ProviderEventsService {
@@ -31,23 +35,23 @@ export class ProviderEventsService {
       rawBody,
       headers,
     );
-    if (result.outcome === "duplicate") {
-      return "accepted";
-    }
     if (result.outcome !== "accepted") {
       return result.outcome;
     }
 
-    const { event, workspaceId } = result;
-    const applied = await this.dispatch.applyProviderEvent(sourceId, event);
-    const reason: SuppressionReason | null =
-      event.type === "complained"
-        ? "complained"
-        : event.type === "suppressed" ||
-            (event.type === "bounced" && event.bounce?.permanent === true)
-          ? "bounced"
-          : null;
-    if (reason) {
+    const { events, workspaceId } = result;
+    for (const event of events) {
+      const applied = await this.dispatch.applyProviderEvent(sourceId, event);
+      const reason: SuppressionReason | null =
+        event.type === "complained"
+          ? "complained"
+          : event.type === "suppressed" ||
+              (event.type === "bounced" && event.bounce?.permanent === true)
+            ? "bounced"
+            : null;
+      if (!reason) {
+        continue;
+      }
       const recipients = applied?.recipients ?? event.recipients;
       for (const email of recipients.filter(isValidEmail)) {
         await this.suppression.record({

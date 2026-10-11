@@ -17,7 +17,12 @@ export type EmailStatus =
   | "failed"
   | "skipped";
 
-export type EmailKind = "transactional" | "campaign" | "sequence" | "test";
+export type EmailKind =
+  | "transactional"
+  | "campaign"
+  | "sequence"
+  | "reply"
+  | "test";
 
 export type EmailError = { code: string; message: string };
 
@@ -80,7 +85,13 @@ export const emailStatuses: EmailStatus[] = [
   "skipped",
 ];
 
-const kinds: EmailKind[] = ["transactional", "campaign", "sequence", "test"];
+const kinds: EmailKind[] = [
+  "transactional",
+  "campaign",
+  "sequence",
+  "reply",
+  "test",
+];
 
 function textMap(value: unknown): Record<string, string> {
   const map: Record<string, string> = {};

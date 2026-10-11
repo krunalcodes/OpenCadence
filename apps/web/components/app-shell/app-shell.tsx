@@ -10,11 +10,13 @@ import { MobileNav } from "@/components/app-shell/mobile-nav";
 import { Rail, type ShellUser } from "@/components/app-shell/rail";
 import { TopBar } from "@/components/app-shell/top-bar";
 import { attempt, authClient, describeAuthError } from "@/lib/auth-client";
+import { useInboxUnread } from "@/lib/inbox-unread";
 import {
   appPathFromPathname,
   defaultPagePath,
   findActivePage,
   findPage,
+  inboxUnreadCountId,
   isNestedPage,
   type ViewCounts,
   withViewCounts,
@@ -67,6 +69,14 @@ export function AppShell({
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const inboxUnread = useInboxUnread(
+    viewCounts?.[inboxUnreadCountId],
+    workspace.id,
+  );
+  const counts: ViewCounts = {
+    ...viewCounts,
+    [inboxUnreadCountId]: inboxUnread,
+  };
 
   const setPanel = useCallback((collapsed: boolean) => {
     setPanelCollapsed(collapsed);
@@ -169,7 +179,7 @@ export function AppShell({
   }
 
   const { page } = current;
-  const area = withViewCounts(current.area, viewCounts ?? {});
+  const area = withViewCounts(current.area, counts);
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background text-[13px] text-foreground leading-normal">
@@ -182,6 +192,7 @@ export function AppShell({
 
       <Rail
         activeAreaId={area.id}
+        counts={counts}
         user={user}
         signingOut={signingOut}
         onSignOut={signOut}
@@ -234,6 +245,7 @@ export function AppShell({
         signingOut={signingOut}
         onSignOut={signOut}
         area={area}
+        counts={counts}
         activePath={page.path}
         open={mobileNavOpen}
         onOpenChange={setMobileNavOpen}

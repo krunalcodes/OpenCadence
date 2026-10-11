@@ -42,6 +42,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Sparkles,
   SquarePen,
   Trash2,
 } from "lucide-react";
@@ -71,6 +72,7 @@ import {
 import { Spinner } from "@/components/spinner";
 import { StatusBadge } from "@/components/status-badge";
 import { DeleteSequenceDialog } from "@/features/sequences/components/delete-sequence-dialog";
+import { GenerateSheet } from "@/features/sequences/components/generate-sheet";
 import { NameDialog } from "@/features/sequences/components/name-dialog";
 import { copy, describeError, statusTone } from "@/features/sequences/lib/copy";
 import {
@@ -106,9 +108,14 @@ const numberHeadClass = cn(tableHeadClass, "w-24 text-right");
 type SequencesScreenProps = {
   result: SequencesResult;
   filters: SequenceFilters;
+  aiConfigured: boolean;
 };
 
-export function SequencesScreen({ result, filters }: SequencesScreenProps) {
+export function SequencesScreen({
+  result,
+  filters,
+  aiConfigured,
+}: SequencesScreenProps) {
   const router = useRouter();
   const ready = result.state === "ready";
   const list = useLoadMore(result, {
@@ -122,6 +129,7 @@ export function SequencesScreen({ result, filters }: SequencesScreenProps) {
   const [naming, setNaming] = useState<SequenceSummary | null>(null);
   const [nameOpen, setNameOpen] = useState(false);
   const [nameKey, setNameKey] = useState(0);
+  const [generating, setGenerating] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [navigating, startNavigation] = useTransition();
   const [retrying, startRetry] = useTransition();
@@ -278,14 +286,25 @@ export function SequencesScreen({ result, filters }: SequencesScreenProps) {
         description={<p className="max-w-[720px]">{copy.description}</p>}
         actions={
           ready ? (
-            <Button
-              type="button"
-              onClick={() => openName(null)}
-              className={primaryButtonClass}
-            >
-              <Plus aria-hidden strokeWidth={1.8} />
-              {copy.add}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setGenerating(true)}
+                className={secondaryButtonClass}
+              >
+                <Sparkles aria-hidden strokeWidth={1.6} />
+                {copy.ai.open}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => openName(null)}
+                className={primaryButtonClass}
+              >
+                <Plus aria-hidden strokeWidth={1.8} />
+                {copy.add}
+              </Button>
+            </>
           ) : null
         }
       />
@@ -380,7 +399,7 @@ export function SequencesScreen({ result, filters }: SequencesScreenProps) {
                 {copy.emptyBody}
               </EmptyDescription>
             </EmptyHeader>
-            <EmptyContent>
+            <EmptyContent className="flex-row flex-wrap justify-center gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -389,6 +408,15 @@ export function SequencesScreen({ result, filters }: SequencesScreenProps) {
               >
                 <Plus aria-hidden strokeWidth={1.8} />
                 {copy.add}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setGenerating(true)}
+                className={secondaryButtonClass}
+              >
+                <Sparkles aria-hidden strokeWidth={1.6} />
+                {copy.ai.open}
               </Button>
             </EmptyContent>
           </Empty>
@@ -595,6 +623,11 @@ export function SequencesScreen({ result, filters }: SequencesScreenProps) {
         sequence={naming}
         onOpenChange={setNameOpen}
         onSaved={handleNamed}
+      />
+      <GenerateSheet
+        open={generating}
+        configured={aiConfigured}
+        onOpenChange={setGenerating}
       />
       <DeleteSequenceDialog
         sequence={target}

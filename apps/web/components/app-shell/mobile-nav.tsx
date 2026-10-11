@@ -21,6 +21,8 @@ import {
   areas,
   defaultPagePath,
   type NavArea,
+  type ViewCounts,
+  withViewCounts,
 } from "@/lib/navigation";
 import type { Workspace } from "@/lib/session";
 
@@ -42,6 +44,7 @@ type MobileNavProps = {
   signingOut: boolean;
   onSignOut: () => void;
   area: NavArea;
+  counts: ViewCounts;
   activePath: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,6 +61,7 @@ export function MobileNav({
   signingOut,
   onSignOut,
   area,
+  counts,
   activePath,
   open,
   onOpenChange,
@@ -162,7 +166,8 @@ export function MobileNav({
               Areas
             </h3>
             <ul className="flex flex-col gap-px">
-              {areas.map((item) => {
+              {areas.map((plain) => {
+                const item = withViewCounts(plain, counts);
                 const Icon = areaIcons[item.id];
                 const active = item.id === area.id;
                 return (
@@ -184,6 +189,14 @@ export function MobileNav({
                       <span className="min-w-0 flex-1 truncate">
                         {item.title}
                       </span>
+                      {item.count ? (
+                        <span className="font-normal text-[11.5px] text-ink-tertiary tabular-nums">
+                          <span aria-hidden>{item.count}</span>
+                          <span className="sr-only">
+                            {`${item.count} ${item.countNoun ?? ""}`}
+                          </span>
+                        </span>
+                      ) : null}
                       {item.attention ? (
                         <span className="flex items-center gap-1.5 font-normal text-danger text-xs">
                           <span

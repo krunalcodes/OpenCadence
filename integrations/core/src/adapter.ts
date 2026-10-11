@@ -29,10 +29,18 @@ export type PasswordCredentials = {
   imap: MailServer;
 };
 
+export type AccessKeyCredentials = {
+  kind: "access_key";
+  accessKeyId: string;
+  secretAccessKey: string;
+  region: string;
+};
+
 export type Credentials =
   | OAuthCredentials
   | ApiKeyCredentials
-  | PasswordCredentials;
+  | PasswordCredentials
+  | AccessKeyCredentials;
 
 export type AuthKind = Credentials["kind"];
 
@@ -217,6 +225,7 @@ export type DeliveryStatus = {
 };
 
 export type ReceivedMessage = {
+  ref?: string;
   messageId?: string;
   inReplyTo?: string;
   references: string[];
@@ -240,6 +249,15 @@ export type ReceivedPage = {
   more: boolean;
 };
 
+export type ReceivedContent = {
+  subject: string;
+  text: string | null;
+  html: string | null;
+  from: MessageAddress | null;
+  to: string[];
+  date: Date | null;
+};
+
 export type InboxSupport = {
   search(
     credentials: Credentials,
@@ -255,6 +273,10 @@ export type InboxSupport = {
     credentials: Credentials,
     input: ReceivedQuery,
   ): Promise<ReceivedPage>;
+  fetchReceived?(
+    credentials: Credentials,
+    ref: string,
+  ): Promise<ReceivedContent | null>;
 };
 
 export type IntegrationAdapter = {

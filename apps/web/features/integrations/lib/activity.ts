@@ -81,6 +81,32 @@ const eventTexts: Record<string, EventText> = {
     detail:
       "Bounce and complaint tracking could not be set up with the provider.",
   },
+  webhook_unsubscribed: {
+    title: "Event tracking stopped",
+    detail:
+      "The SNS subscription was removed, so bounces and complaints are no longer reported.",
+  },
+  event_topic_saved: {
+    title: "SNS topic saved",
+    detail: "Events are accepted from this topic once it is subscribed.",
+  },
+  event_destination_failed: {
+    title: "Event destination not set",
+    detail:
+      "The event destination could not be created in Amazon SES. Add it by hand or allow the access key to do it.",
+  },
+  reply_detection_enabled: {
+    title: "Reply detection turned on",
+    detail: "Read access was granted, so replies to this mailbox are detected.",
+  },
+  reply_detection_not_granted: {
+    title: "Reply detection not turned on",
+    detail: "The provider did not grant read access to the mailbox.",
+  },
+  reply_detection_disabled: {
+    title: "Reply detection turned off",
+    detail: "OpenCadence no longer reads this mailbox.",
+  },
   rate_limited: {
     title: "Rate limit reached",
     detail: "The provider asked OpenCadence to slow down.",

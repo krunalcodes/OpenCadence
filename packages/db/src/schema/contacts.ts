@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -127,6 +128,9 @@ export const lists = pgTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
+    isPublic: boolean("is_public").default(false).notNull(),
+    publicName: text("public_name"),
+    publicDescription: text("public_description"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

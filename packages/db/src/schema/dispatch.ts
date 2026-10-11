@@ -100,7 +100,7 @@ export const messages = pgTable(
       .where(sql`${table.providerMessageId} is not null`),
     check(
       "messages_kind_check",
-      sql`${table.kind} in ('transactional', 'campaign', 'sequence', 'test')`,
+      sql`${table.kind} in ('transactional', 'campaign', 'sequence', 'reply', 'test')`,
     ),
     check(
       "messages_status_check",
@@ -222,6 +222,40 @@ export const messageEvents = pgTable(
     check(
       "message_events_type_check",
       sql`${table.type} in ('sent', 'delivered', 'delayed', 'bounced', 'complained', 'failed', 'opened', 'clicked', 'replied', 'unsubscribed')`,
+    ),
+  ],
+);
+
+const hourlyCounter = (name: string) => integer(name).default(0).notNull();
+
+export const messageHourlyStats = pgTable(
+  "message_hourly_stats",
+  {
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    hour: timestamp("hour", { withTimezone: true }).notNull(),
+    kind: text("kind").notNull(),
+    trackOpens: boolean("track_opens").notNull(),
+    sent: hourlyCounter("sent"),
+    delivered: hourlyCounter("delivered"),
+    bounced: hourlyCounter("bounced"),
+    complained: hourlyCounter("complained"),
+    failed: hourlyCounter("failed"),
+    opened: hourlyCounter("opened"),
+    clicked: hourlyCounter("clicked"),
+    replied: hourlyCounter("replied"),
+    unsubscribed: hourlyCounter("unsubscribed"),
+  },
+  (table) => [
+    primaryKey({
+      name: "message_hourly_stats_pk",
+      columns: [table.workspaceId, table.hour, table.kind, table.trackOpens],
+    }),
+    index("message_hourly_stats_hour_idx").on(table.hour),
+    check(
+      "message_hourly_stats_kind_check",
+      sql`${table.kind} in ('transactional', 'campaign', 'sequence', 'reply', 'test')`,
     ),
   ],
 );

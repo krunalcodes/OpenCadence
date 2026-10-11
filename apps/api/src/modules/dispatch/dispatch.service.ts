@@ -69,6 +69,12 @@ export type TrackedMessage = {
   unsubscribedAt: Date | null;
 };
 
+export type RecentSender = {
+  workspaceId: string;
+  sourceId: string;
+  integrationType: string;
+};
+
 export type SnapshotInput = {
   subject: string;
   previewText?: string | null;
@@ -629,6 +635,29 @@ export class DispatchService {
     return this.repository.hourlyByKind(workspaceId, window);
   }
 
+  async recentSenders(input: {
+    since: Date;
+    kinds: MessageKind[];
+    workspaceIds?: string[];
+    accepts: (integrationType: string) => boolean;
+  }): Promise<RecentSender[]> {
+    const connected = (
+      await this.repository.listConnectedSources(input.workspaceIds)
+    ).filter((source) => input.accepts(source.integrationType));
+    const types = new Map(
+      connected.map((source) => [source.sourceId, source.integrationType]),
+    );
+    const active = await this.repository.filterRecentSenders(
+      connected,
+      input.since,
+      input.kinds,
+    );
+    return active.map((source) => ({
+      ...source,
+      integrationType: types.get(source.sourceId) ?? "",
+    }));
+  }
+
   hasMessages(workspaceId: string): Promise<boolean> {
     return this.repository.hasMessages(workspaceId);
   }
@@ -658,11 +687,18 @@ export class DispatchService {
     workspaceId: string,
     rfcMessageId: string,
   ): Promise<MessageDto | null> {
-    const id = rfcMessageId.trim().replace(/^</, "").split("@")[0] ?? "";
+    const inner = rfcMessageId.trim().replace(/^<+/, "").replace(/>+$/, "");
+    const id = inner.split("@")[0] ?? "";
     const createdAt = uuidv7Date(id);
     const row = createdAt
       ? await this.repository.findListedMessage(workspaceId, id, createdAt)
-      : null;
+      : id !== "" && inner.includes("@")
+        ? await this.repository.findListedByAssignedId(
+            workspaceId,
+            `<${inner}>`,
+            id,
+          )
+        : null;
     return row ? toMessageDto(row) : null;
   }
 

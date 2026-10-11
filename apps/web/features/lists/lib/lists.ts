@@ -4,6 +4,9 @@ export type List = {
   id: string;
   name: string;
   description: string | null;
+  isPublic: boolean;
+  publicName: string | null;
+  publicDescription: string | null;
   subscribedCount: number;
   unsubscribedCount: number;
   createdAt: string;
@@ -14,7 +17,16 @@ export type ListsResult =
   | { state: "ready"; lists: List[] }
   | { state: "failed" };
 
-export type ListInput = { name: string; description: string };
+export type ListInput = {
+  name: string;
+  description: string;
+  isPublic: boolean;
+  publicName: string;
+  publicDescription: string;
+};
+
+export const maxPublicNameLength = 80;
+export const maxPublicDescriptionLength = 500;
 
 export function toList(value: unknown): List | null {
   if (!isRow(value)) {
@@ -30,6 +42,9 @@ export function toList(value: unknown): List | null {
     id,
     name,
     description: textOrNull(row.description),
+    isPublic: row.isPublic === true,
+    publicName: textOrNull(row.publicName),
+    publicDescription: textOrNull(row.publicDescription),
     subscribedCount: countOf(row.subscribedCount),
     unsubscribedCount: countOf(row.unsubscribedCount),
     createdAt: textOrNull(row.createdAt) ?? "",

@@ -11,13 +11,11 @@ import { SegmentsModule } from "../segments/segments.module";
 import { SuppressionModule } from "../suppression/suppression.module";
 import { TemplatesModule } from "../templates/templates.module";
 import { EnrollmentsService } from "./enrollments.service";
-import { ReplyDetector } from "./reply-detector";
 import { SequenceOutcomes } from "./sequence-outcomes";
 import { SequenceRunner } from "./sequence-runner";
 import {
   SEQUENCE_CLOCK,
   SEQUENCE_ENROLL_QUEUE,
-  SEQUENCE_REPLIES_QUEUE,
   SEQUENCE_TICK_QUEUE,
   systemClock,
 } from "./sequences.constants";
@@ -28,7 +26,6 @@ import { SequencesService } from "./sequences.service";
 export const sequencesQueues = BullModule.registerQueue(
   { name: SEQUENCE_TICK_QUEUE },
   { name: SEQUENCE_ENROLL_QUEUE },
-  { name: SEQUENCE_REPLIES_QUEUE },
 );
 
 export const sequencesProviders = [
@@ -37,7 +34,6 @@ export const sequencesProviders = [
   EnrollmentsService,
   SequenceRunner,
   SequenceOutcomes,
-  ReplyDetector,
 ];
 
 @Module({
@@ -59,13 +55,11 @@ export class SequencesModule implements OnModuleInit {
   constructor(
     @InjectQueue(SEQUENCE_TICK_QUEUE) private readonly tickQueue: Queue,
     @InjectQueue(SEQUENCE_ENROLL_QUEUE) private readonly enrollQueue: Queue,
-    @InjectQueue(SEQUENCE_REPLIES_QUEUE) private readonly repliesQueue: Queue,
     @Inject(QueueBoard) private readonly board: QueueBoard,
   ) {}
 
   onModuleInit() {
     this.board.register(this.tickQueue);
     this.board.register(this.enrollQueue);
-    this.board.register(this.repliesQueue);
   }
 }

@@ -8,13 +8,7 @@ import {
 import { DATABASE } from "../../infra/database/database.module";
 import type { EnrollmentStatus, SequenceStatus } from "./sequences.constants";
 
-const {
-  contacts,
-  sequenceEnrollments,
-  sequenceReplyCursors,
-  sequenceSteps,
-  sequences,
-} = schema;
+const { contacts, sequenceEnrollments, sequenceSteps, sequences } = schema;
 
 type Executor = Pick<Db, "insert" | "update" | "delete" | "select" | "execute">;
 
@@ -31,6 +25,7 @@ export type SequenceSettings = {
   name: string;
   sourceIds: string[];
   fromName: string | null;
+  fromEmail: string | null;
   trackOpens: boolean;
   trackClicks: boolean;
   stopOnReply: boolean;
@@ -118,7 +113,7 @@ export class SequencesRepository {
     return this.db
       .select({
         sequence: sequences,
-        stepCount: sql<number>`(select count(*)::int from ${sequenceSteps} where ${sequenceSteps.sequenceId} = ${sequences.id})`,
+        stepCount: sql<number>`(select count(*)::int from "sequence_steps" where "sequence_steps"."sequence_id" = "sequences"."id")`,
         cursorAt: sql<string>`to_char(${sequences.createdAt} at time zone 'UTC', ${keysetTimestampFormat})`,
       })
       .from(sequences)
@@ -821,32 +816,6 @@ export class SequencesRepository {
     });
   }
 
-  async listReplySources(input: {
-    activeSince: Date;
-    workspaceIds?: string[];
-  }): Promise<{ workspaceId: string; sourceId: string }[]> {
-    const result = await this.db.execute<{
-      workspaceId: string;
-      sourceId: string;
-    }>(sql`
-      select distinct s.workspace_id as "workspaceId", used.source_id as "sourceId"
-      from ${sequences} as s
-      cross join lateral unnest(s.source_ids) as used(source_id)
-      where s.enrolled_count > 0
-        and (
-          s.status in ('active', 'paused')
-          or s.updated_at > ${timestamp(input.activeSince)}
-        )
-        ${
-          input.workspaceIds
-            ? sql`and s.workspace_id = any(${uuidArray(input.workspaceIds)})`
-            : sql``
-        }
-      order by 1, 2
-    `);
-    return result.rows;
-  }
-
   listReconcilable(input: { workspaceIds?: string[]; activeSince: Date }) {
     return this.db
       .select({ id: sequences.id, workspaceId: sequences.workspaceId })
@@ -860,32 +829,5 @@ export class SequencesRepository {
             : undefined,
         ),
       );
-  }
-
-  async findReplyCursor(sourceId: string) {
-    const [row] = await this.db
-      .select()
-      .from(sequenceReplyCursors)
-      .where(eq(sequenceReplyCursors.sourceId, sourceId));
-    return row ?? null;
-  }
-
-  async saveReplyCursor(input: {
-    workspaceId: string;
-    sourceId: string;
-    lastCheckedAt: Date;
-    state: Record<string, string | number> | null;
-  }) {
-    await this.db
-      .insert(sequenceReplyCursors)
-      .values(input)
-      .onConflictDoUpdate({
-        target: sequenceReplyCursors.sourceId,
-        set: {
-          lastCheckedAt: input.lastCheckedAt,
-          state: input.state,
-          updatedAt: new Date(),
-        },
-      });
   }
 }

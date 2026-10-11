@@ -2,23 +2,6 @@ export const weekdays = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export type Weekday = (typeof weekdays)[number];
 
-const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-export function minutesToTime(minutes: number) {
-  const clamped = Math.min(1439, Math.max(0, Math.round(minutes)));
-  const hours = Math.floor(clamped / 60);
-  const rest = clamped % 60;
-  return `${String(hours).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
-}
-
-export function timeToMinutes(value: string) {
-  const match = timePattern.exec(value.trim());
-  if (!match) {
-    return null;
-  }
-  return Number(match[1]) * 60 + Number(match[2]);
-}
-
 export function browserTimezone() {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || null;

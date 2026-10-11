@@ -9,8 +9,8 @@ import {
 import {
   endpoints,
   type GmailContext,
-  gmailScopes,
   gmailSendScope,
+  scopesFor,
 } from "./config";
 import { type TokenAction, tokenEndpointError } from "./errors";
 import { asString, type JsonObject, readJson, request } from "./http";
@@ -76,7 +76,7 @@ function authorizationUrl(
   url.searchParams.set("client_id", context.clientId);
   url.searchParams.set("redirect_uri", authorization.redirectUri);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", gmailScopes.join(" "));
+  url.searchParams.set("scope", scopesFor(context).join(" "));
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("include_granted_scopes", "true");
@@ -166,7 +166,7 @@ async function revoke(
 
 export function createOAuth(context: GmailContext): OAuthSupport {
   return {
-    scopes: [...gmailScopes],
+    scopes: scopesFor(context),
     authorizationUrl: (authorization) =>
       authorizationUrl(context, authorization),
     exchangeCode: (exchange) => exchangeCode(context, exchange),

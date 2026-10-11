@@ -102,6 +102,7 @@ export function SequenceScreen({
   const [nameKey, setNameKey] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [fromEmailFocus, setFromEmailFocus] = useState(0);
   const revealCount = useRef(0);
 
   const id = sequence.id;
@@ -332,6 +333,11 @@ export function SequenceScreen({
                 setCheckOpen(false);
                 selectTab("settings");
               }}
+              onOpenFromEmail={() => {
+                setCheckOpen(false);
+                selectTab("settings");
+                setFromEmailFocus((value) => value + 1);
+              }}
             />
           )}
           {status === "active" ? (
@@ -477,6 +483,7 @@ export function SequenceScreen({
             <SettingsTab
               sequence={sequence}
               sources={sources}
+              fromEmailFocus={fromEmailFocus}
               onSaved={handleSequenceChange}
             />
           ) : null}

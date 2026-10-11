@@ -37,7 +37,12 @@ type WebhookServer = {
   register(plugin: (scope: WebhookScope) => Promise<void>): unknown;
 };
 
-const statusByOutcome = { accepted: 204, not_found: 404, rejected: 401 };
+const statusByOutcome = {
+  accepted: 204,
+  not_found: 404,
+  rejected: 401,
+  unavailable: 503,
+};
 
 @Module({
   imports: [DispatchModule, IntegrationsModule, SuppressionModule],
@@ -56,6 +61,12 @@ export class ProviderEventsModule implements OnModuleInit {
       scope.removeContentTypeParser("application/json");
       scope.addContentTypeParser(
         "application/json",
+        { parseAs: "string", bodyLimit: 1024 * 1024 },
+        (_request, body, done) => done(null, body),
+      );
+      scope.removeContentTypeParser("text/plain");
+      scope.addContentTypeParser(
+        "text/plain",
         { parseAs: "string", bodyLimit: 1024 * 1024 },
         (_request, body, done) => done(null, body),
       );

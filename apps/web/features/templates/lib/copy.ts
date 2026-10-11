@@ -166,6 +166,7 @@ export const copy = {
       "brand.address": "Postal address",
       "brand.website": "Website",
       unsubscribe_url: "Unsubscribe link",
+      preferences_url: "Email preferences link",
     } as Record<string, string>,
     option: (group: string, label: string) => `${group}: ${label}`,
   },

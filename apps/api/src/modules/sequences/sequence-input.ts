@@ -1,6 +1,11 @@
 import { HttpStatus } from "@nestjs/common";
 import { apiError } from "../../common/api-error";
 import { isUuid } from "../../common/uuid";
+import {
+  isValidEmail,
+  normalizeEmail,
+} from "../suppression/suppression.service";
+import { outreachHtmlToText, sanitizeOutreachHtml } from "./draft-content";
 import { isTimezone } from "./send-window";
 import {
   maxDelayMinutes,
@@ -18,7 +23,17 @@ export type StepInput = {
   threadMode: "reply" | "new";
 };
 
+export type DraftStepInput = {
+  delayMinutes: number;
+  subject: string;
+  html: string;
+  text: string;
+  threadMode: "reply" | "new";
+};
+
 export const maxNameLength = 120;
+export const maxDraftSteps = 10;
+export const maxDraftHtmlLength = 100_000;
 const maxSubjectLength = 998;
 const maxDailyLimit = 10_000;
 const maxLayoutNodes = 100;
@@ -152,6 +167,19 @@ function parseLayout(value: unknown) {
   return layout;
 }
 
+function parseFromEmail(value: unknown) {
+  if (value === null || value === "") {
+    return null;
+  }
+  if (typeof value !== "string" || !isValidEmail(value)) {
+    throw validation(
+      "Enter a valid from address, or leave it empty.",
+      "fromEmail",
+    );
+  }
+  return normalizeEmail(value);
+}
+
 export function parseSettings(input: unknown): Partial<SequenceSettings> {
   const body = record(input);
   const values: Partial<SequenceSettings> = {};
@@ -166,6 +194,9 @@ export function parseSettings(input: unknown): Partial<SequenceSettings> {
       body.fromName === null
         ? null
         : parseLine(body.fromName, "fromName", "the from name", 120) || null;
+  }
+  if (body.fromEmail !== undefined) {
+    values.fromEmail = parseFromEmail(body.fromEmail);
   }
   if (body.trackOpens !== undefined) {
     values.trackOpens = parseFlag(body.trackOpens, "trackOpens");
@@ -293,6 +324,90 @@ export function parseSteps(input: unknown): StepInput[] {
       threadMode,
     };
   });
+}
+
+export function parseDraft(input: unknown): {
+  name: string;
+  steps: DraftStepInput[];
+} {
+  const body = record(input);
+  const name = parseName(body.name);
+  const { steps } = body;
+  if (!Array.isArray(steps) || steps.length === 0) {
+    throw validation("Send at least one step.", "steps");
+  }
+  if (steps.length > maxDraftSteps) {
+    throw validation(
+      `A drafted sequence holds up to ${maxDraftSteps} steps.`,
+      "steps",
+    );
+  }
+  let threadSubject = "";
+  return {
+    name,
+    steps: steps.map((item, index) => {
+      const field = `steps.${index}`;
+      const step = record(item);
+      const minimum = index === 0 ? 0 : 1;
+      if (
+        !isWholeNumber(step.waitMinutes) ||
+        step.waitMinutes < minimum ||
+        step.waitMinutes > maxDelayMinutes
+      ) {
+        throw validation(
+          index === 0
+            ? "The first wait is a whole number of minutes, zero or more."
+            : "Wait at least one minute between steps.",
+          `${field}.waitMinutes`,
+        );
+      }
+      const threadMode = step.threadMode ?? (index === 0 ? "new" : "reply");
+      if (threadMode !== "reply" && threadMode !== "new") {
+        throw validation(
+          "threadMode must be reply or new.",
+          `${field}.threadMode`,
+        );
+      }
+      const given =
+        step.subject === undefined || step.subject === null
+          ? ""
+          : parseLine(
+              step.subject,
+              `${field}.subject`,
+              "the subject",
+              maxSubjectLength,
+            );
+      if (typeof step.html !== "string" || step.html.trim() === "") {
+        throw validation("Every step needs content.", `${field}.html`);
+      }
+      if (step.html.length > maxDraftHtmlLength) {
+        throw validation(
+          `The content of a step is at most ${maxDraftHtmlLength.toLocaleString("en-US")} characters.`,
+          `${field}.html`,
+        );
+      }
+      const html = sanitizeOutreachHtml(step.html.replaceAll("\0", ""));
+      const text = outreachHtmlToText(html);
+      if (text === "") {
+        throw validation(
+          "This step has no content left after unsafe markup is removed.",
+          `${field}.html`,
+        );
+      }
+      const startsThread = index === 0 || threadMode === "new";
+      const subject = given || (startsThread ? "" : threadSubject);
+      if (startsThread) {
+        threadSubject = subject;
+      }
+      return {
+        delayMinutes: step.waitMinutes,
+        subject,
+        html,
+        text,
+        threadMode,
+      };
+    }),
+  };
 }
 
 export function parseContactIds(value: unknown) {

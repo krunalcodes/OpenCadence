@@ -2,7 +2,6 @@ import type { Audience } from "../segments/audience.service";
 
 export const SEQUENCE_TICK_QUEUE = "sequence-tick";
 export const SEQUENCE_ENROLL_QUEUE = "sequence-enroll";
-export const SEQUENCE_REPLIES_QUEUE = "sequence-replies";
 
 export const SEQUENCE_CLOCK = Symbol("SEQUENCE_CLOCK");
 
@@ -19,7 +18,6 @@ export const sequenceJobs = {
   tick: "tick",
   reconcile: "reconcile",
   enroll: "enroll",
-  replies: "replies",
 } as const;
 
 export type EnrollJob = {
@@ -64,7 +62,6 @@ export const dayMs = 24 * hourMs;
 
 export const tickEveryMs = 30 * secondMs;
 export const reconcileEveryMs = 5 * minuteMs;
-export const repliesEveryMs = 2 * minuteMs;
 
 export const maxSteps = 20;
 export const maxSources = 50;
@@ -81,11 +78,6 @@ export const maxOpeningJitterMs = 20 * minuteMs;
 export const sourceSpacingMs = 25 * secondMs;
 export const shortWindowMinutes = 60;
 
-export const replyOverlapMs = 10 * minuteMs;
-export const replyFirstLookbackMs = dayMs;
-export const replyPageSize = 100;
-export const maxReplyPagesPerRun = 10;
-export const maxReferencesChecked = 20;
 export const replySourceRecencyMs = 30 * dayMs;
 
 export const reconcilePageSize = 100;

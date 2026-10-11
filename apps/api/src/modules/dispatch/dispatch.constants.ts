@@ -70,6 +70,8 @@ export const unsubscribeMarkerHeader = "x-opencadence-unsubscribe";
 export const contentRetentionDays = 90;
 export const messageRetentionMonths = 12;
 export const idempotencyRetentionHours = 24;
+export const bulkIdempotencyRetentionDays = 30;
+export const bulkIdempotencyKeyPrefixes = ["campaign:", "seq:"] as const;
 
 const sendsPerSecond: Record<string, number> = { gmail: 1, resend: 8 };
 

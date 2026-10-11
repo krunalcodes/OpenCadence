@@ -4,10 +4,12 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpStatus,
   Inject,
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -27,6 +29,8 @@ import {
 } from "../../common/decorators/workspace-auth.decorator";
 import type { WorkspaceAuthContext } from "../../common/guards/workspace-auth.guard";
 import type { Env } from "../../config/env";
+import { apiError } from "./api-error";
+import { isMailboxProvider } from "./mailbox-providers";
 import {
   type Actor,
   SendingSourcesService,
@@ -162,13 +166,42 @@ export class SendingSourcesController {
     return this.sources.connectImapSmtp(actorOf(workspace), body(input));
   }
 
-  @Post("gmail/authorize")
+  @Post("ses")
+  @WorkspaceAuth("session", "apiKey")
+  @ApiOperation({
+    summary: "Connect an Amazon SES account",
+    description:
+      "Checks the access key with Amazon SES in the chosen region, stores it encrypted, and returns whether the account is in the sandbox, its sending quota, and its verified identities.",
+  })
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["name", "accessKeyId", "secretAccessKey", "region"],
+      properties: {
+        name: { type: "string", maxLength: 80 },
+        accessKeyId: { type: "string" },
+        secretAccessKey: { type: "string" },
+        region: { type: "string", example: "us-east-1" },
+        configurationSet: { type: "string", maxLength: 64 },
+        topicArn: { type: "string" },
+        dailySendLimit: { type: "integer", minimum: 1 },
+      },
+    },
+  })
+  connectSes(
+    @CurrentWorkspace() workspace: WorkspaceAuthContext,
+    @Body() input: unknown,
+  ) {
+    return this.sources.connectSes(actorOf(workspace), body(input));
+  }
+
+  @Post(":provider/authorize")
   @HttpCode(200)
   @WorkspaceAuth("session")
   @ApiOperation({
-    summary: "Start connecting a Gmail mailbox",
+    summary: "Start connecting a Gmail or Outlook mailbox",
     description:
-      "Returns the Google consent URL to send the browser to. Google returns the user to the callback, which finishes the connection.",
+      "Returns the consent URL of the provider (gmail or outlook) to send the browser to. The provider returns the user to the callback, which finishes the connection. The mailbox is connected for sending only.",
   })
   @ApiBody({
     schema: {
@@ -176,39 +209,98 @@ export class SendingSourcesController {
       properties: { dailySendLimit: { type: "integer", minimum: 1 } },
     },
   })
-  gmailAuthorize(
+  authorize(
     @CurrentWorkspace() workspace: WorkspaceAuthContext,
+    @Param("provider") provider: string,
     @Body() input: unknown,
   ) {
-    return this.sources.gmailAuthorizeUrl(actorOf(workspace), {
-      dailySendLimit: body(input).dailySendLimit,
-    });
+    return this.sources.authorizeUrl(
+      this.mailboxProvider(provider),
+      actorOf(workspace),
+      { dailySendLimit: body(input).dailySendLimit },
+    );
   }
 
-  @Get("gmail/callback")
+  @Get(":provider/callback")
   @AllowAnonymous()
   @ApiExcludeEndpoint()
-  async gmailCallback(
+  async callback(
     @Req() request: { session?: AuthSession | null },
     @Res() reply: RedirectReply,
+    @Param("provider") provider: string,
     @Query("code") code?: string,
     @Query("state") state?: string,
     @Query("error") error?: string,
   ) {
-    const outcome = await this.sources.gmailCallback(
+    const mailbox = this.mailboxProvider(provider);
+    const outcome = await this.sources.oauthCallback(
+      mailbox,
       request.session?.user.id ?? null,
       { code, state, error },
     );
     const base = this.config
       .get("BETTER_AUTH_URL", { infer: true })
       .replace(/\/+$/, "");
-    const query = outcome.connected
-      ? "connected=gmail"
-      : `connect_error=${encodeURIComponent(outcome.code)}`;
+    const query = outcome.ok
+      ? `${outcome.result}=${mailbox}`
+      : `connect_error=${encodeURIComponent(outcome.code)}&provider=${mailbox}`;
     return reply
       .code(302)
       .header("location", `${base}/app/integrations?${query}`)
       .send();
+  }
+
+  @Post(":id/reply-detection")
+  @HttpCode(200)
+  @WorkspaceAuth("session")
+  @ApiOperation({
+    summary: "Start turning on reply detection for a mailbox",
+    description:
+      "Returns the consent URL that asks the provider for read access to the mailbox. Reply detection turns on when the user returns and the read permission was granted.",
+  })
+  enableReplyDetection(
+    @CurrentWorkspace() workspace: WorkspaceAuthContext,
+    @Param("id") id: string,
+  ) {
+    return this.sources.replyDetectionAuthorizeUrl(actorOf(workspace), id);
+  }
+
+  @Delete(":id/reply-detection")
+  @WorkspaceAuth("session", "apiKey")
+  @ApiOperation({
+    summary: "Turn off reply detection for a mailbox",
+    description:
+      "Stops reading the mailbox. The permission itself stays granted until it is removed in the provider account.",
+  })
+  disableReplyDetection(
+    @CurrentWorkspace() workspace: WorkspaceAuthContext,
+    @Param("id") id: string,
+  ) {
+    return this.sources.disableReplyDetection(actorOf(workspace), id);
+  }
+
+  @Put(":id/event-topic")
+  @WorkspaceAuth("session", "apiKey")
+  @ApiOperation({
+    summary: "Set the SNS topic an Amazon SES source receives events from",
+    description:
+      "Saves the topic ARN that bounce and complaint notifications must come from. When the source has a configuration set and the access key allows it, the event destination is created in Amazon SES as well.",
+  })
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["topicArn"],
+      properties: { topicArn: { type: "string" } },
+    },
+  })
+  setEventTopic(
+    @CurrentWorkspace() workspace: WorkspaceAuthContext,
+    @Param("id") id: string,
+    @Body() input: unknown,
+  ) {
+    return this.sources.setEventTopic(actorOf(workspace), id, {
+      topicArn: body(input).topicArn,
+    });
   }
 
   @Patch(":id")
@@ -290,5 +382,16 @@ export class SendingSourcesController {
     @Param("id") id: string,
   ) {
     await this.sources.disconnect(actorOf(workspace), id);
+  }
+
+  private mailboxProvider(provider: string) {
+    if (!isMailboxProvider(provider)) {
+      throw apiError(
+        HttpStatus.NOT_FOUND,
+        "not_found",
+        "This kind of mailbox cannot be connected with a sign-in.",
+      );
+    }
+    return provider;
   }
 }

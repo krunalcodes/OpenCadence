@@ -73,6 +73,13 @@ export class ListsController {
       properties: {
         name: { type: "string", minLength: 1, maxLength: 80 },
         description: { type: "string", maxLength: 500, nullable: true },
+        isPublic: {
+          type: "boolean",
+          description:
+            "Show this list in the preference centre, where recipients choose what they get.",
+        },
+        publicName: { type: "string", maxLength: 80, nullable: true },
+        publicDescription: { type: "string", maxLength: 500, nullable: true },
       },
     },
   })
@@ -80,8 +87,15 @@ export class ListsController {
     @CurrentWorkspace() workspace: WorkspaceAuthContext,
     @Body() input: unknown,
   ) {
-    const { name, description } = body(input);
-    return this.lists.create(workspace.workspaceId, { name, description });
+    const { name, description, isPublic, publicName, publicDescription } =
+      body(input);
+    return this.lists.create(workspace.workspaceId, {
+      name,
+      description,
+      isPublic,
+      publicName,
+      publicDescription,
+    });
   }
 
   @Get(":id")
@@ -106,6 +120,13 @@ export class ListsController {
       properties: {
         name: { type: "string", minLength: 1, maxLength: 80 },
         description: { type: "string", maxLength: 500, nullable: true },
+        isPublic: {
+          type: "boolean",
+          description:
+            "Show this list in the preference centre, where recipients choose what they get.",
+        },
+        publicName: { type: "string", maxLength: 80, nullable: true },
+        publicDescription: { type: "string", maxLength: 500, nullable: true },
       },
     },
   })
@@ -114,8 +135,15 @@ export class ListsController {
     @Param("id") id: string,
     @Body() input: unknown,
   ) {
-    const { name, description } = body(input);
-    return this.lists.update(workspace.workspaceId, id, { name, description });
+    const { name, description, isPublic, publicName, publicDescription } =
+      body(input);
+    return this.lists.update(workspace.workspaceId, id, {
+      name,
+      description,
+      isPublic,
+      publicName,
+      publicDescription,
+    });
   }
 
   @Delete(":id")

@@ -4,6 +4,7 @@ import type { Job, Queue } from "bullmq";
 import { uuidv7Floor } from "../../../common/uuid";
 import { ContentArchive } from "../content-archive";
 import {
+  bulkIdempotencyRetentionDays,
   contentRetentionDays,
   DISPATCH_MAINTENANCE_QUEUE,
   idempotencyRetentionHours,
@@ -14,6 +15,7 @@ import {
 } from "../dispatch.constants";
 import {
   DispatchRepository,
+  hourFloor,
   type PartitionedTable,
 } from "../dispatch.repository";
 
@@ -22,6 +24,8 @@ const archiveContents = "archive-contents";
 const pruneIdempotencyKeys = "prune-idempotency-keys";
 const requeueStuck = "requeue-stuck";
 const requeueStuckDeep = "requeue-stuck-deep";
+const reconcileHourlyStats = "reconcile-hourly-stats";
+const backfillHourlyStats = "backfill-hourly-stats";
 
 const partitionMonthsAhead = 3;
 const hourMs = 60 * 60 * 1000;
@@ -29,6 +33,24 @@ const dayMs = 24 * hourMs;
 const archiveBatchSize = 200;
 const minuteMs = 60 * 1000;
 const requeueBatchSize = 500;
+const pruneBatchSize = 1000;
+const backfillAttempts = 20;
+
+export const idempotencySweepMs = 2 * dayMs;
+export const reconcileWindowMs = 2 * dayMs;
+export const reconcileSliceMs = 6 * hourMs;
+
+export type BackfillCursor = { workspaceId: string; from: string };
+
+function retentionStart(now: Date) {
+  return new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth() - messageRetentionMonths,
+      1,
+    ),
+  );
+}
 
 export const stuckAfterMs = 5 * minuteMs;
 export const stuckWindowMs = hourMs;
@@ -83,6 +105,22 @@ export class DispatchMaintenanceProcessor
       { every: dayMs },
       { name: requeueStuckDeep, opts: { attempts: 1 } },
     );
+    await this.queue.upsertJobScheduler(
+      reconcileHourlyStats,
+      { every: hourMs },
+      { name: reconcileHourlyStats, opts: { attempts: 1 } },
+    );
+    await this.queue.add(
+      backfillHourlyStats,
+      {},
+      {
+        jobId: backfillHourlyStats,
+        attempts: backfillAttempts,
+        backoff: { type: "exponential", delay: minuteMs },
+        removeOnComplete: false,
+        removeOnFail: false,
+      },
+    );
   }
 
   async process(job: Job) {
@@ -99,11 +137,143 @@ export class DispatchMaintenanceProcessor
       return this.requeueStuck(stuckDeepWindowMs);
     }
     if (job.name === pruneIdempotencyKeys) {
-      await this.repository.deleteIdempotencyKeysBefore(
-        new Date(Date.now() - idempotencyRetentionHours * hourMs),
+      return this.pruneIdempotencyKeys();
+    }
+    if (job.name === reconcileHourlyStats) {
+      return this.reconcileHourlyStats();
+    }
+    if (job.name === backfillHourlyStats) {
+      return this.backfillHourlyStats(
+        (job.data as { cursor?: BackfillCursor }).cursor ?? null,
+        (cursor) => job.updateData({ cursor }),
       );
     }
     return null;
+  }
+
+  async pruneIdempotencyKeys(now = new Date()) {
+    const before = new Date(now.getTime() - idempotencyRetentionHours * hourMs);
+    const bulkBefore = new Date(
+      now.getTime() - bulkIdempotencyRetentionDays * dayMs,
+    );
+    const sweepFrom = new Date(
+      Math.max(bulkBefore.getTime(), before.getTime() - idempotencySweepMs),
+    );
+    const expired = await this.pruneKeys({
+      from: null,
+      before: bulkBefore,
+      bulk: true,
+    });
+    const shortLived = await this.pruneKeys({
+      from: sweepFrom,
+      before,
+      bulk: false,
+    });
+    return { removed: expired + shortLived };
+  }
+
+  private async pruneKeys(scope: {
+    from: Date | null;
+    before: Date;
+    bulk: boolean;
+  }) {
+    let from = scope.from;
+    let removed = 0;
+    for (;;) {
+      const batch = await this.repository.deleteIdempotencyKeys(
+        { ...scope, from },
+        pruneBatchSize,
+      );
+      removed += batch.count;
+      if (batch.count < pruneBatchSize) {
+        return removed;
+      }
+      from = batch.last ?? from;
+    }
+  }
+
+  async reconcileHourlyStats(now = new Date(), workspaceIds?: string[]) {
+    const to = new Date(hourFloor(now).getTime() + hourMs);
+    const from = new Date(to.getTime() - reconcileWindowMs);
+    const workspaces =
+      workspaceIds ??
+      (await this.repository.listHourlyStatsWorkspaces({ from, to }));
+    let corrected = 0;
+    let added = 0;
+    let failed = 0;
+    for (const workspaceId of workspaces) {
+      try {
+        for (
+          let start = from.getTime();
+          start < to.getTime();
+          start += reconcileSliceMs
+        ) {
+          const result = await this.repository.reconcileHourlyStats(
+            workspaceId,
+            {
+              from: new Date(start),
+              to: new Date(Math.min(start + reconcileSliceMs, to.getTime())),
+            },
+          );
+          corrected += result.corrected;
+          added += result.added;
+        }
+      } catch (error) {
+        failed += 1;
+        this.logger.error(
+          `Hourly totals for workspace ${workspaceId} were not reconciled: ${
+            error instanceof Error ? error.message : "unknown error"
+          }`,
+        );
+      }
+    }
+    if (corrected + added > 0) {
+      this.logger.warn(
+        `Corrected ${corrected} and added ${added} hourly totals that had drifted.`,
+      );
+    }
+    return { workspaces: workspaces.length, corrected, added, failed };
+  }
+
+  async backfillHourlyStats(
+    cursor: BackfillCursor | null = null,
+    save: (cursor: BackfillCursor) => Promise<unknown> = async () => undefined,
+    now = new Date(),
+  ) {
+    const start = retentionStart(now);
+    let resume = cursor;
+    let workspaces = 0;
+    let added = 0;
+    for (;;) {
+      const workspaceId: string | null = resume
+        ? resume.workspaceId
+        : await this.repository.nextWorkspaceWithMessages(null);
+      if (!workspaceId) {
+        return { workspaces, added };
+      }
+      let from = resume ? new Date(resume.from) : start;
+      for (;;) {
+        const first = await this.repository.firstMessageAt(workspaceId, from);
+        if (!first || first > now) {
+          break;
+        }
+        const day = new Date(Math.floor(first.getTime() / dayMs) * dayMs);
+        from = new Date(day.getTime() + dayMs);
+        const result = await this.repository.reconcileHourlyStats(workspaceId, {
+          from: day,
+          to: from,
+        });
+        added += result.added + result.corrected;
+        await save({ workspaceId, from: from.toISOString() });
+      }
+      workspaces += 1;
+      const next = await this.repository.nextWorkspaceWithMessages(workspaceId);
+      if (!next) {
+        return { workspaces, added };
+      }
+      resume = { workspaceId: next, from: start.toISOString() };
+      await save(resume);
+    }
   }
 
   async maintainPartitions() {
@@ -116,14 +286,7 @@ export class DispatchMaintenanceProcessor
       "message_events",
       partitionMonthsAhead,
     );
-    const now = new Date();
-    const cutoff = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth() - messageRetentionMonths,
-        1,
-      ),
-    );
+    const cutoff = retentionStart(new Date());
     const dropped: string[] = [];
     for (const table of ["message_events", "messages"] as const) {
       for (const name of await this.repository.listPartitions(table)) {
@@ -134,7 +297,17 @@ export class DispatchMaintenanceProcessor
         }
       }
     }
-    return { dropped };
+    let hourlyStats = 0;
+    for (;;) {
+      const removed = await this.repository.deleteHourlyStatsBefore(
+        cutoff,
+        pruneBatchSize,
+      );
+      hourlyStats += removed;
+      if (removed < pruneBatchSize) {
+        return { dropped, hourlyStats };
+      }
+    }
   }
 
   async requeueStuck(windowMs: number, now = new Date()) {

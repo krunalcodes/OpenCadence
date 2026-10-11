@@ -104,6 +104,7 @@ export type OverviewMailbox = {
 };
 
 export type AlertCode =
+  | "domain_failing"
   | "source_needs_attention"
   | "source_paused"
   | "campaign_failed"
@@ -190,6 +191,7 @@ const mailboxStatuses: MailboxStatus[] = [
 ];
 const healthValues: HealthDay[] = ["healthy", "warning", "failing", "none"];
 const alertCodes: AlertCode[] = [
+  "domain_failing",
   "source_needs_attention",
   "source_paused",
   "campaign_failed",

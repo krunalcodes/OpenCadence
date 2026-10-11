@@ -123,6 +123,25 @@ export class TrackingController {
       .send();
   }
 
+  @Get("p/:token")
+  @AllowAnonymous()
+  @ApiOperation({
+    summary: "Email preferences link",
+    description:
+      "Redirects to the page where a recipient chooses which lists they get. Opening the link changes nothing.",
+  })
+  preferencesLink(@Param("token") token: string, @Res() reply: Reply) {
+    const location = this.tracking.preferencesPage(token);
+    if (!location) {
+      throw notFound();
+    }
+    reply
+      .status(302)
+      .header("Location", location)
+      .header("Cache-Control", noStore)
+      .send();
+  }
+
   @Get("u/:token/details")
   @AllowAnonymous()
   @ApiOperation({

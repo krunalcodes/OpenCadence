@@ -30,7 +30,9 @@ export default async function IntegrationsPage({
       result={result}
       notice={{
         connected: first(params.connected),
+        replyDetection: first(params.reply_detection),
         connectError: first(params.connect_error),
+        provider: first(params.provider),
       }}
     />
   );

@@ -5,6 +5,7 @@ import {
   toStatusFilter,
 } from "@/features/sequences/lib/sequences";
 import { getSequences } from "@/features/sequences/queries/sequences";
+import { loadAiSettings } from "@/lib/ai-server";
 import { getActiveWorkspace } from "@/lib/session";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,6 +31,15 @@ export default async function SequencesPage({
     status: toStatusFilter(first(params.status)),
     search: toSearchFilter(first(params.search)),
   };
-  const result = await getSequences(filters);
-  return <SequencesScreen result={result} filters={filters} />;
+  const [result, ai] = await Promise.all([
+    getSequences(filters),
+    loadAiSettings(),
+  ]);
+  return (
+    <SequencesScreen
+      result={result}
+      filters={filters}
+      aiConfigured={ai?.configured === true}
+    />
+  );
 }

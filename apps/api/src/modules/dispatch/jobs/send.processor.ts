@@ -37,6 +37,18 @@ const maxCachedSnapshots = 32;
 const dayMs = 24 * 60 * 60 * 1000;
 const limitResetSpreadMs = 60 * 1000;
 
+export function assignedMessageId(
+  stored: string | null,
+  assigned: string | undefined,
+) {
+  const inner = assigned?.trim().replace(/^<+/, "").replace(/>+$/, "").trim();
+  if (!inner || /\s/.test(inner) || !inner.includes("@")) {
+    return {};
+  }
+  const rfcMessageId = `<${inner}>`;
+  return rfcMessageId === stored ? {} : { rfcMessageId };
+}
+
 export function nextDailyLimitReset(now = new Date()) {
   return (
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) + dayMs
@@ -148,6 +160,7 @@ export class SendProcessor extends WorkerHost {
           expectedStatus: ["queued"],
           patch: {
             providerMessageId: result.providerMessageId,
+            ...assignedMessageId(message.rfcMessageId, result.messageId),
             attempts: message.attempts + 1,
             sentAt,
             toEmails: recipients.to,

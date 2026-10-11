@@ -40,6 +40,7 @@ type CheckPopoverProps = {
   onRetry: () => void;
   onShowStep: (stepId: string) => void;
   onOpenSettings: () => void;
+  onOpenFromEmail: () => void;
 };
 
 const actionClass = cn(
@@ -55,6 +56,7 @@ export function CheckPopover({
   onRetry,
   onShowStep,
   onOpenSettings,
+  onOpenFromEmail,
 }: CheckPopoverProps) {
   if (check.state === "loading") {
     return (
@@ -145,6 +147,7 @@ export function CheckPopover({
           tone="error"
           onShowStep={onShowStep}
           onOpenSettings={onOpenSettings}
+          onOpenFromEmail={onOpenFromEmail}
         />
         <ProblemList
           label={text.warningsLabel}
@@ -153,6 +156,7 @@ export function CheckPopover({
           tone="warning"
           onShowStep={onShowStep}
           onOpenSettings={onOpenSettings}
+          onOpenFromEmail={onOpenFromEmail}
         />
         {blocking && warnings.length > 0 ? (
           <p className="text-[12.5px] text-ink-tertiary">{text.warningsNote}</p>
@@ -169,6 +173,7 @@ type ProblemListProps = {
   tone: "error" | "warning";
   onShowStep: (stepId: string) => void;
   onOpenSettings: () => void;
+  onOpenFromEmail: () => void;
 };
 
 function ProblemList({
@@ -178,6 +183,7 @@ function ProblemList({
   tone,
   onShowStep,
   onOpenSettings,
+  onOpenFromEmail,
 }: ProblemListProps) {
   if (problems.length === 0) {
     return null;
@@ -221,6 +227,14 @@ function ProblemList({
                     className={actionClass}
                   >
                     {text.showStep}
+                  </button>
+                ) : problem.code === "source_without_address" ? (
+                  <button
+                    type="button"
+                    onClick={onOpenFromEmail}
+                    className={actionClass}
+                  >
+                    {text.addFromEmail}
                   </button>
                 ) : settingsFields.includes(problem.field) ? (
                   <button

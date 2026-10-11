@@ -1,3 +1,4 @@
+import { splitTrailer } from "@/lib/ai-stream";
 import { isRow, rowsOf, textOrNull } from "@/lib/api";
 
 export const draftKinds = [
@@ -61,19 +62,6 @@ export type ReviewIssue = {
 };
 
 export type Review = { issues: ReviewIssue[]; aiReviewed: boolean };
-
-const trailer = /\s*<error>\s*([a-z_]*)\s*<\/error>\s*$/;
-
-export function splitTrailer(raw: string): {
-  text: string;
-  code: string | null;
-} {
-  const match = trailer.exec(raw);
-  if (!match) {
-    return { text: raw, code: null };
-  }
-  return { text: raw.slice(0, match.index), code: match[1] || "unknown" };
-}
 
 function withoutPartialTag(value: string) {
   const open = value.lastIndexOf("<");

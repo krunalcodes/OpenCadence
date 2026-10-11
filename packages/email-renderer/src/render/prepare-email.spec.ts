@@ -285,6 +285,28 @@ describe("unsubscribe", () => {
     );
   });
 
+  it("fills the preferences_url merge tag and never tracks that link", () => {
+    const preferencesUrl = `${baseUrl}/t/p/${token}`;
+    const output = clicks(
+      `<body><a href="{{ preferences_url }}">Preferences</a><a href="{{unsubscribe_url}}">Stop</a></body>`,
+      { unsubscribe: true, variables: { preferences_url: "#" } },
+    );
+    expect(output).toBe(
+      `<body><a href="${preferencesUrl}">Preferences</a><a href="${unsubscribeUrl}">Stop</a></body>`,
+    );
+    expect(
+      prepare({ text: "Choose: {{preferences_url}}", unsubscribe: true }).text,
+    ).toContain(`Choose: ${preferencesUrl}`);
+  });
+
+  it("leaves preferences_url to the caller when the email has no unsubscribe link", () => {
+    expect(
+      html(`<a href="{{preferences_url}}">Preferences</a>`, {
+        variables: { preferences_url: "#" },
+      }),
+    ).toBe(`<a href="#">Preferences</a>`);
+  });
+
   it("finds the link whatever the quoting and case", () => {
     for (const source of [
       "<A HREF={{unsubscribe_url}}>Stop</A>",
