@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { Option } from "@/components/product/option";
 import {
   type MergeField,
   type Template,
@@ -8,11 +7,11 @@ import {
   templatePath,
   templatesQuery,
   toMergeFields,
-  toSourceOptions,
   toTemplate,
   toTemplatesPage,
 } from "@/features/templates/lib/templates";
 import { apiRequest } from "@/lib/api-server";
+import { type SourceChoice, toSourceChoices } from "@/lib/sources";
 
 export async function getTemplates(search: string): Promise<TemplatesResult> {
   const { status, data } = await apiRequest(
@@ -36,9 +35,9 @@ export async function getTemplate(id: string): Promise<TemplateResult> {
   return template ? { state: "ready", template } : { state: "failed" };
 }
 
-export async function getSourceOptions(): Promise<Option[]> {
+export async function getSources(): Promise<SourceChoice[]> {
   const { status, data } = await apiRequest("/sending-sources");
-  return status === 200 ? toSourceOptions(data) : [];
+  return status === 200 ? toSourceChoices(data) : [];
 }
 
 export async function getMergeFields(): Promise<MergeField[]> {

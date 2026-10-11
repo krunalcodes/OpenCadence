@@ -198,6 +198,48 @@ export type InboxActionResult = {
   unsupported: InboxAction["type"][];
 };
 
+export const receivedHeaderNames = [
+  "auto-submitted",
+  "x-autoreply",
+  "x-autorespond",
+  "precedence",
+  "x-failed-recipients",
+  "content-type",
+] as const;
+
+export type ReceivedHeaderName = (typeof receivedHeaderNames)[number];
+
+export type DeliveryStatus = {
+  action?: string;
+  status?: string;
+  originalMessageId?: string;
+  failedRecipient?: string;
+};
+
+export type ReceivedMessage = {
+  messageId?: string;
+  inReplyTo?: string;
+  references: string[];
+  from?: { email: string };
+  receivedAt: Date;
+  headers: Partial<Record<ReceivedHeaderName, string>>;
+  deliveryStatus?: DeliveryStatus;
+};
+
+export type ReceivedCursor = Record<string, string | number>;
+
+export type ReceivedQuery = {
+  since: Date;
+  state: ReceivedCursor | null;
+  limit: number;
+};
+
+export type ReceivedPage = {
+  messages: ReceivedMessage[];
+  state: ReceivedCursor;
+  more: boolean;
+};
+
 export type InboxSupport = {
   search(
     credentials: Credentials,
@@ -209,6 +251,10 @@ export type InboxSupport = {
     actions: InboxAction[],
   ): Promise<InboxActionResult>;
   ensureFolder(credentials: Credentials, name: string): Promise<InboxFolder>;
+  listReceived?(
+    credentials: Credentials,
+    input: ReceivedQuery,
+  ): Promise<ReceivedPage>;
 };
 
 export type IntegrationAdapter = {

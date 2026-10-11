@@ -271,6 +271,147 @@ describe.skipIf(!certificate)("real protocol", () => {
     expect(imap.commands.at(-1)).toBe("LOGOUT");
   });
 
+  it("lists received mail over a read-only session without marking anything read", async () => {
+    const root = "<0199a000-0000-7000-8000-000000000001@example.com>";
+    const status =
+      "Reporting-MTA: dns; mx.customer.example\r\n\r\nFinal-Recipient: rfc822; lead@customer.example\r\nAction: failed\r\nStatus: 5.1.1\r\n";
+    const original = `From: ada@example.com\r\nMessage-ID: ${root}\r\nSubject: Hello\r\n\r\n`;
+    const { inbox, credentials, imap } = await start({
+      imap: {
+        received: [
+          {
+            uid: 41,
+            internalDate: "10-Oct-2026 08:30:00 +0000",
+            envelope: `("Sat, 10 Oct 2026 08:30:00 +0000" "Re: Hello" (("Lead" NIL "lead" "customer.example")) NIL NIL ((NIL NIL "ada" "example.com")) NIL NIL "${root}" "<reply-41@customer.example>")`,
+            headers: `References: ${root}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n`,
+            bodyStructure:
+              '("TEXT" "PLAIN" ("CHARSET" "utf-8") NIL NIL "7BIT" 12 1 NIL NIL NIL NIL)',
+          },
+          {
+            uid: 42,
+            internalDate: "10-Oct-2026 08:31:00 +0000",
+            envelope:
+              '("Sat, 10 Oct 2026 08:31:00 +0000" "Undelivered Mail Returned to Sender" ((NIL NIL "MAILER-DAEMON" "mx.customer.example")) NIL NIL ((NIL NIL "ada" "example.com")) NIL NIL NIL "<dsn-42@mx.customer.example>")',
+            headers:
+              'Content-Type: multipart/report; report-type=delivery-status;\r\n boundary="b1"\r\nAuto-Submitted: auto-replied\r\n\r\n',
+            bodyStructure:
+              '(("TEXT" "PLAIN" ("CHARSET" "us-ascii") NIL NIL "7BIT" 20 1 NIL NIL NIL NIL)("MESSAGE" "DELIVERY-STATUS" NIL NIL NIL "7BIT" 120 NIL NIL NIL NIL)("TEXT" "RFC822-HEADERS" ("CHARSET" "us-ascii") NIL NIL "7BIT" 90 3 NIL NIL NIL NIL) "REPORT" ("REPORT-TYPE" "delivery-status" "BOUNDARY" "b1") NIL NIL NIL)',
+            parts: { "2": status, "3": original },
+          },
+        ],
+      },
+    });
+    const since = new Date("2026-10-09T12:00:00.000Z");
+    const first = await inbox.listReceived?.(credentials, {
+      since,
+      state: null,
+      limit: 1,
+    });
+
+    expect(first).toEqual({
+      messages: [
+        {
+          messageId: "<reply-41@customer.example>",
+          inReplyTo: root,
+          references: [root],
+          from: { email: "lead@customer.example" },
+          receivedAt: new Date("2026-10-10T08:30:00.000Z"),
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        },
+      ],
+      state: { uidValidity: "9", lastUid: 41 },
+      more: true,
+    });
+
+    const second = await inbox.listReceived?.(credentials, {
+      since,
+      state: first?.state ?? null,
+      limit: 1,
+    });
+    expect(second).toEqual({
+      messages: [
+        {
+          messageId: "<dsn-42@mx.customer.example>",
+          references: [],
+          from: { email: "MAILER-DAEMON@mx.customer.example" },
+          receivedAt: new Date("2026-10-10T08:31:00.000Z"),
+          headers: {
+            "content-type":
+              'multipart/report; report-type=delivery-status; boundary="b1"',
+            "auto-submitted": "auto-replied",
+          },
+          deliveryStatus: {
+            action: "failed",
+            status: "5.1.1",
+            originalMessageId: root,
+            failedRecipient: "lead@customer.example",
+          },
+        },
+      ],
+      state: { uidValidity: "9", lastUid: 42 },
+      more: false,
+    });
+
+    const third = await inbox.listReceived?.(credentials, {
+      since,
+      state: second?.state ?? null,
+      limit: 1,
+    });
+    expect(third).toEqual({
+      messages: [],
+      state: { uidValidity: "9", lastUid: 42 },
+      more: false,
+    });
+
+    const used = new Set(
+      imap.commands.map((command) =>
+        command.startsWith("UID ")
+          ? command.split(" ").slice(0, 2).join(" ")
+          : command.split(" ")[0],
+      ),
+    );
+    for (const changing of [
+      "SELECT",
+      "UID STORE",
+      "STORE",
+      "UID MOVE",
+      "UID COPY",
+      "UID EXPUNGE",
+      "EXPUNGE",
+      "APPEND",
+      "CREATE",
+      "DELETE",
+      "CLOSE",
+    ]) {
+      expect(used.has(changing)).toBe(false);
+    }
+    expect(
+      imap.commands.filter((command) => command.startsWith("EXAMINE")),
+    ).toEqual(["EXAMINE INBOX", "EXAMINE INBOX", "EXAMINE INBOX"]);
+    const fetches = imap.commands.filter((command) =>
+      command.startsWith("UID FETCH"),
+    );
+    expect(fetches).toHaveLength(3);
+    expect(fetches[0]).toMatch(
+      /BODY\.PEEK\[HEADER\.FIELDS \(references auto-submitted x-autoreply x-autorespond precedence x-failed-recipients content-type\)\]/i,
+    );
+    expect(fetches[2]).toMatch(/BODY\.PEEK\[2\]<0\.32768>/i);
+    expect(fetches[2]).toMatch(/BODY\.PEEK\[3\]<0\.32768>/i);
+    for (const fetch of fetches) {
+      expect(fetch.replace(/BODY\.PEEK\[/gi, "")).not.toMatch(
+        /BODY\[|RFC822(?!\.SIZE)|BINARY\[/i,
+      );
+    }
+    expect(
+      imap.commands.filter((command) => command.startsWith("UID SEARCH")),
+    ).toEqual([
+      expect.stringMatching(/^UID SEARCH SINCE "?0?8-Oct-2026"?$/i),
+      "UID SEARCH UID 42:*",
+      "UID SEARCH UID 43:*",
+    ]);
+    expect(imap.flagsOf("INBOX")).toEqual([[], []]);
+  });
+
   it("returns null when the search excludes spam", async () => {
     const { inbox, credentials } = await start();
     expect(

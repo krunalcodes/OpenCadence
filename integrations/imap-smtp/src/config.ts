@@ -12,6 +12,7 @@ import {
   type ImapFlowOptions,
   type ListResponse,
   type MailboxCreateResponse,
+  type MailboxObject,
   type SearchObject,
 } from "imapflow";
 import nodemailer, {
@@ -23,7 +24,18 @@ export type ImapMailbox = Pick<ListResponse, "path" | "name" | "specialUse">;
 
 export type ImapFetchedMessage = Pick<
   FetchMessageObject,
-  "uid" | "flags" | "labels" | "envelope" | "internalDate" | "headers"
+  | "uid"
+  | "flags"
+  | "labels"
+  | "envelope"
+  | "internalDate"
+  | "headers"
+  | "bodyStructure"
+  | "bodyParts"
+>;
+
+export type ImapOpenedMailbox = Partial<
+  Pick<MailboxObject, "uidValidity" | "uidNext">
 >;
 
 export type ImapMoveResult = Pick<CopyResponseObject, "destination" | "uidMap">;
@@ -35,7 +47,10 @@ export type ImapClient = {
   logout(): Promise<void>;
   close(): void;
   list(): Promise<ImapMailbox[]>;
-  mailboxOpen(path: string, options?: { readOnly?: boolean }): Promise<unknown>;
+  mailboxOpen(
+    path: string,
+    options?: { readOnly?: boolean },
+  ): Promise<ImapOpenedMailbox>;
   mailboxCreate(path: string): Promise<Pick<MailboxCreateResponse, "path">>;
   search(
     query: SearchObject,
@@ -46,6 +61,11 @@ export type ImapClient = {
     query: FetchQueryObject,
     options?: { uid?: boolean },
   ): Promise<ImapFetchedMessage | false | undefined>;
+  fetchAll(
+    range: string,
+    query: FetchQueryObject,
+    options?: { uid?: boolean },
+  ): Promise<ImapFetchedMessage[]>;
   messageMove(
     range: string,
     destination: string,

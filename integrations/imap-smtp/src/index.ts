@@ -10,6 +10,7 @@ export type {
   ImapFetchedMessage,
   ImapMailbox,
   ImapMoveResult,
+  ImapOpenedMailbox,
   ImapSmtpAdapterConfig,
   SmtpTransport,
   SmtpTransportFactory,

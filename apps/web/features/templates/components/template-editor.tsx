@@ -86,6 +86,7 @@ import { saveTemplate } from "@/features/templates/queries/client";
 import type { Brand } from "@/lib/brand";
 import { maxImageBytes, uploadImage } from "@/lib/media";
 import { appHref } from "@/lib/navigation";
+import type { SourceChoice } from "@/lib/sources";
 
 const text = copy.editor;
 
@@ -103,7 +104,7 @@ export type TemplateEditorProps = {
   workspaceName: string;
   userEmail: string;
   aiConfigured: boolean;
-  sources: Option[];
+  sources: SourceChoice[];
   fields: MergeField[];
 };
 

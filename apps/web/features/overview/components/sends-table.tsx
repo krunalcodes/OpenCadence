@@ -8,57 +8,64 @@ import {
   TableRow,
 } from "@workspace/ui/components/table";
 import Link from "next/link";
-import { type BadgeTone, StatusBadge } from "@/components/status-badge";
+import { SourceMark } from "@/components/product/source-mark";
+import { tableCellClass, tableHeadClass } from "@/components/product/styles";
+import { StatusBadge } from "@/components/status-badge";
+import { CardLink } from "@/features/overview/components/overview-card";
 import {
-  type SendStatus,
-  sendsCard,
-  type TodaySend,
-} from "@/features/overview/lib/sample";
+  copy,
+  formatRate,
+  sendStatusTones,
+} from "@/features/overview/lib/copy";
+import { type OverviewSend, sendPath } from "@/features/overview/lib/overview";
 import { appHref } from "@/lib/navigation";
 
-const statusTones: Record<SendStatus, BadgeTone> = {
-  sending: "live",
-  sent: "success",
-  scheduled: "warning",
-  draft: "neutral",
-};
-
-const countFormat = new Intl.NumberFormat("en-US");
-
-function progressLabel(send: TodaySend) {
-  if (send.status === "sent" || send.status === "draft") {
-    return countFormat.format(send.total);
-  }
-  return `${countFormat.format(send.sent)} / ${countFormat.format(send.total)}`;
-}
-
-function rateLabel(rate: number | null) {
-  return rate === null ? sendsCard.emptyValue : `${rate.toFixed(1)}%`;
-}
-
-const headClass =
-  "h-auto bg-muted/50 px-4 py-2 text-xs font-medium text-ink-tertiary";
-const cellClass = "px-4 py-[11px] text-[13px]";
-
 type SendsTableProps = {
-  sends: TodaySend[];
+  sends: OverviewSend[];
+  timezone: string;
 };
 
-export function SendsTable({ sends }: SendsTableProps) {
-  const { columns } = sendsCard;
+function RateCell({ rate }: { rate: number | null }) {
+  return (
+    <TableCell
+      className={`${tableCellClass} text-right tabular-nums ${rate === null ? "text-ink-tertiary" : ""}`}
+    >
+      {formatRate(rate)}
+    </TableCell>
+  );
+}
+
+export function SendsTable({ sends, timezone }: SendsTableProps) {
+  const { columns } = copy.sends;
+
+  if (sends.length === 0) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
+        <p className="min-w-0 text-[13px] text-muted-foreground">
+          <span className="font-medium text-foreground">
+            {copy.sends.emptyTitle}
+          </span>{" "}
+          {copy.sends.emptyBody}
+        </p>
+        <CardLink href={appHref(copy.sends.actionPath)}>
+          {copy.sends.emptyAction}
+        </CardLink>
+      </div>
+    );
+  }
 
   return (
     <Table className="min-w-[680px] text-[13px]">
       <TableHeader className="[&_tr]:border-border-subtle">
         <TableRow className="hover:bg-transparent">
-          <TableHead className={headClass}>{columns.name}</TableHead>
-          <TableHead className={headClass}>{columns.via}</TableHead>
-          <TableHead className={headClass}>{columns.status}</TableHead>
-          <TableHead className={headClass}>{columns.progress}</TableHead>
-          <TableHead className={`${headClass} text-right`}>
+          <TableHead className={tableHeadClass}>{columns.name}</TableHead>
+          <TableHead className={tableHeadClass}>{columns.via}</TableHead>
+          <TableHead className={tableHeadClass}>{columns.status}</TableHead>
+          <TableHead className={tableHeadClass}>{columns.progress}</TableHead>
+          <TableHead className={`${tableHeadClass} text-right`}>
             {columns.opens}
           </TableHead>
-          <TableHead className={`${headClass} text-right`}>
+          <TableHead className={`${tableHeadClass} text-right`}>
             {columns.clicks}
           </TableHead>
         </TableRow>
@@ -66,66 +73,61 @@ export function SendsTable({ sends }: SendsTableProps) {
       <TableBody>
         {sends.map((send) => (
           <TableRow
-            key={send.id}
+            key={`${send.kind}-${send.id}`}
             className="border-border-subtle hover:bg-muted/50"
           >
-            <TableCell className={`${cellClass} max-w-56`}>
+            <TableCell className={`${tableCellClass} max-w-56`}>
               <Link
-                href={appHref(send.path)}
+                href={appHref(sendPath(send))}
                 className="block truncate rounded-[4px] font-medium text-foreground hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
                 {send.name}
               </Link>
               <div className="truncate text-xs text-ink-tertiary">
-                {send.detail}
+                {copy.sends.detail(send)}
               </div>
             </TableCell>
-            <TableCell className={cellClass}>
-              {send.via ? (
-                <span className="inline-flex items-center gap-1.5 text-muted-foreground tabular-nums">
-                  <span
-                    aria-hidden="true"
-                    className="grid size-4 place-items-center rounded-[4px] border border-border bg-muted text-[9px] font-semibold text-muted-foreground"
-                  >
-                    {send.via.mark}
-                  </span>
-                  {send.via.label}
+            <TableCell className={tableCellClass}>
+              {send.source ? (
+                <span className="inline-flex max-w-44 items-center gap-1.5 text-muted-foreground">
+                  <SourceMark
+                    integration={{
+                      id: send.source.integrationType,
+                      mark: null,
+                    }}
+                    className="size-4 rounded-[4px] [&_svg]:size-2.5"
+                  />
+                  <span className="truncate">{send.source.name}</span>
                 </span>
               ) : (
                 <span className="text-xs text-ink-tertiary">
-                  {sendsCard.viaFallback}
+                  {send.kind === "sequence"
+                    ? copy.sends.sequenceVia
+                    : copy.sends.viaFallback}
                 </span>
               )}
             </TableCell>
-            <TableCell className={cellClass}>
-              <StatusBadge tone={statusTones[send.status]}>
-                {send.statusLabel}
+            <TableCell className={tableCellClass}>
+              <StatusBadge tone={sendStatusTones[send.status]}>
+                {copy.sends.status(send, timezone)}
               </StatusBadge>
             </TableCell>
-            <TableCell className={cellClass}>
+            <TableCell className={tableCellClass}>
               <div className="flex min-w-[150px] items-center gap-2">
                 <TickProgress
-                  value={send.sent}
+                  value={send.done}
                   max={send.total}
                   tone={send.status === "sent" ? "success" : "brand"}
                   className="min-w-[60px] flex-1"
-                  aria-label={`${send.name}: ${countFormat.format(send.sent)} of ${countFormat.format(send.total)} sent`}
+                  aria-label={copy.sends.progressLabel(send)}
                 />
                 <span className="text-xs text-ink-tertiary tabular-nums">
-                  {progressLabel(send)}
+                  {copy.sends.progress(send)}
                 </span>
               </div>
             </TableCell>
-            <TableCell
-              className={`${cellClass} text-right tabular-nums ${send.openRate === null ? "text-xs text-ink-tertiary" : ""}`}
-            >
-              {rateLabel(send.openRate)}
-            </TableCell>
-            <TableCell
-              className={`${cellClass} text-right tabular-nums ${send.clickRate === null ? "text-xs text-ink-tertiary" : ""}`}
-            >
-              {rateLabel(send.clickRate)}
-            </TableCell>
+            <RateCell rate={send.openRate} />
+            <RateCell rate={send.clickRate} />
           </TableRow>
         ))}
       </TableBody>

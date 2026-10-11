@@ -1,9 +1,21 @@
 import { TriangleAlert } from "lucide-react";
 import { CardLink } from "@/features/overview/components/overview-card";
-import { overviewAlert } from "@/features/overview/lib/sample";
+import { copy } from "@/features/overview/lib/copy";
+import type {
+  OverviewAlert,
+  OverviewRangeId,
+} from "@/features/overview/lib/overview";
 import { appHref } from "@/lib/navigation";
 
-export function DeliverabilityAlert() {
+type DeliverabilityAlertProps = {
+  alert: OverviewAlert;
+  range: OverviewRangeId;
+};
+
+export function DeliverabilityAlert({
+  alert,
+  range,
+}: DeliverabilityAlertProps) {
   return (
     <div
       role="status"
@@ -16,15 +28,12 @@ export function DeliverabilityAlert() {
       />
       <p className="min-w-0 flex-1 basis-64">
         <strong className="font-semibold text-danger">
-          {overviewAlert.title}
+          {copy.alert.title(alert)}
         </strong>{" "}
-        {overviewAlert.body}
+        {copy.alert.body(alert, range)}
       </p>
-      <CardLink
-        href={appHref(overviewAlert.actionPath)}
-        className="border-danger/25"
-      >
-        {overviewAlert.actionLabel}
+      <CardLink href={appHref(alert.path)} className="border-danger/25">
+        {copy.alert.action(alert)}
       </CardLink>
     </div>
   );

@@ -201,7 +201,6 @@ export const copy = {
     toInvalid: "Enter a valid email address, such as you@example.com.",
     source: "Send from",
     sourcePlaceholder: "Default source",
-    sourceEmpty: "No source matches",
     sourceHint: "Leave empty to use the workspace's default sending source.",
     noSources:
       "No sending source is connected yet. Connect a mailbox or provider on the Integrations page first.",

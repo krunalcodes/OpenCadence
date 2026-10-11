@@ -155,11 +155,47 @@ function plainLogin(encoded: string): Account {
 
 type StoredMessage = { uid: number; flags: Set<string>; labels: Set<string> };
 
+export type ScriptedReceived = {
+  uid: number;
+  internalDate: string;
+  envelope: string;
+  headers: string;
+  bodyStructure: string;
+  parts?: Record<string, string>;
+};
+
 export type ImapScript = {
   account: Account;
   gmail?: boolean;
   uidPlus?: boolean;
+  received?: ScriptedReceived[];
 };
+
+export type ScriptedImapServer = ScriptedServer & {
+  flagsOf(mailbox: string): string[][];
+};
+
+function literal(content: string) {
+  return `{${Buffer.byteLength(content)}}\r\n${content}`;
+}
+
+function uidsOf(set: string, known: number[]) {
+  const highest = Math.max(0, ...known);
+  const wanted = new Set<number>();
+  for (const piece of set.split(",")) {
+    const bounds = piece
+      .split(":")
+      .map((bound) => (bound === "*" ? highest : Number(bound)));
+    const low = Math.min(...bounds);
+    const high = Math.max(...bounds);
+    for (const uid of known) {
+      if (uid >= low && uid <= high) {
+        wanted.add(uid);
+      }
+    }
+  }
+  return [...wanted];
+}
 
 const imapMessage = {
   messageId: "<warm-1@sender.example>",
@@ -174,9 +210,19 @@ export function startImapServer(
   certificate: Certificate,
   security: Security,
   script: ImapScript,
-): Promise<ScriptedServer> {
+): Promise<ScriptedImapServer> {
+  const received = new Map(
+    (script.received ?? []).map((message) => [message.uid, message]),
+  );
   const mailboxes = new Map<string, StoredMessage[]>([
-    ["INBOX", []],
+    [
+      "INBOX",
+      [...received.keys()].map((uid) => ({
+        uid,
+        flags: new Set<string>(),
+        labels: new Set<string>(),
+      })),
+    ],
     ["Junk", [{ uid: 31, flags: new Set(), labels: new Set() }]],
   ]);
   const nextUid = new Map<string, number>([["INBOX", 500]]);
@@ -196,6 +242,7 @@ export function startImapServer(
     let secure = security === "tls";
     let authTag: string | undefined;
     let selected: string | undefined;
+    let readOnly = false;
     return (line, connection) => {
       if (authTag) {
         const tag = authTag;
@@ -274,6 +321,7 @@ export function startImapServer(
             return;
           }
           selected = name;
+          readOnly = command === "EXAMINE";
           connection.write(
             "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)",
           );
@@ -288,6 +336,31 @@ export function startImapServer(
           return;
         }
         case "UID SEARCH": {
+          const range = args.match(/^UID (\S+)$/i)?.[1];
+          if (received.size > 0 && selected === "INBOX" && range) {
+            const uids = uidsOf(
+              range,
+              messages().map((message) => message.uid),
+            );
+            connection.write(
+              `* SEARCH${uids.map((uid) => ` ${uid}`).join("")}`,
+            );
+            ok();
+            return;
+          }
+          if (
+            received.size > 0 &&
+            selected === "INBOX" &&
+            /^SINCE/i.test(args)
+          ) {
+            connection.write(
+              `* SEARCH${messages()
+                .map((message) => ` ${message.uid}`)
+                .join("")}`,
+            );
+            ok();
+            return;
+          }
           const found = args.includes(imapMessage.messageId)
             ? messages().map((message) => message.uid)
             : [];
@@ -296,6 +369,55 @@ export function startImapServer(
           return;
         }
         case "UID FETCH": {
+          if (received.size > 0 && selected === "INBOX") {
+            const wanted = uidsOf(
+              args.split(" ")[0] ?? "",
+              messages().map((message) => message.uid),
+            );
+            for (const [index, stored] of messages().entries()) {
+              const message = received.get(stored.uid);
+              if (!message || !wanted.includes(stored.uid)) {
+                continue;
+              }
+              if (!readOnly && /BODY\[|RFC822(?!\.SIZE)/i.test(args)) {
+                stored.flags.add("\\Seen");
+              }
+              const items = [`UID ${stored.uid}`];
+              if (/INTERNALDATE/i.test(args)) {
+                items.push(`INTERNALDATE "${message.internalDate}"`);
+              }
+              if (/ENVELOPE/i.test(args)) {
+                items.push(`ENVELOPE ${message.envelope}`);
+              }
+              if (/BODYSTRUCTURE/i.test(args)) {
+                items.push(`BODYSTRUCTURE ${message.bodyStructure}`);
+              }
+              const fields = args.match(/HEADER\.FIELDS \(([^)]*)\)/i)?.[1];
+              if (fields !== undefined) {
+                items.push(
+                  `BODY[HEADER.FIELDS (${fields})] ${literal(message.headers)}`,
+                );
+              }
+              for (const part of args.matchAll(
+                /BODY(?:\.PEEK)?\[(\d[\w.]*)\]<(\d+)\.(\d+)>/gi,
+              )) {
+                const content = message.parts?.[part[1]?.toUpperCase() ?? ""];
+                if (content !== undefined) {
+                  const from = Number(part[2]);
+                  items.push(
+                    `BODY[${part[1]}]<${from}> ${literal(
+                      Buffer.from(content)
+                        .subarray(from, from + Number(part[3]))
+                        .toString("utf8"),
+                    )}`,
+                  );
+                }
+              }
+              connection.write(`* ${index + 1} FETCH (${items.join(" ")})`);
+            }
+            ok();
+            return;
+          }
           const uid = Number(args.split(" ")[0]);
           const index = messages().findIndex((entry) => entry.uid === uid);
           const message = messages()[index];
@@ -407,7 +529,11 @@ export function startImapServer(
       ),
     createHandler,
     commands,
-  );
+  ).then((server) => ({
+    ...server,
+    flagsOf: (mailbox: string) =>
+      (mailboxes.get(mailbox) ?? []).map((message) => [...message.flags]),
+  }));
 }
 
 export type SmtpScript = {

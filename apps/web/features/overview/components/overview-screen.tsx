@@ -1,30 +1,39 @@
+"use client";
+
 import {
   type CadenceEventState,
-  type CadenceLane,
   CadenceTimeline,
 } from "@workspace/ui/blocks/cadence-timeline";
 import { cn } from "@workspace/ui/lib/utils";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState, useTransition } from "react";
+import { PageHeader } from "@/components/app-shell/page-header";
+import { LoadFailed } from "@/components/product/load-failed";
+import { Spinner } from "@/components/spinner";
 import { DeliverabilityAlert } from "@/features/overview/components/deliverability-alert";
+import { GettingStarted } from "@/features/overview/components/getting-started";
 import { MailboxList } from "@/features/overview/components/mailbox-list";
 import {
   CardLink,
   OverviewCard,
 } from "@/features/overview/components/overview-card";
-import { OverviewSummary } from "@/features/overview/components/overview-summary";
+import { RangeSwitch } from "@/features/overview/components/range-switch";
 import { SendsTable } from "@/features/overview/components/sends-table";
+import { StatRow } from "@/features/overview/components/stat-row";
+import { useTimezoneSync } from "@/features/overview/components/timezone-setup";
+import { useOverviewRefresh } from "@/features/overview/hooks/use-overview-refresh";
+import { copy } from "@/features/overview/lib/copy";
 import {
-  cadenceCard,
   cadenceLanes,
-  cadenceLegend,
-  mailboxesCard,
-  mailboxRows,
-  sampleNotice,
-  sendsCard,
-  todaySends,
-  warmupLaneEndHour,
-  warmupLaneId,
-  warmupLaneLabel,
-} from "@/features/overview/lib/sample";
+  dayPart,
+  defaultOverviewRange,
+  hasCadence,
+  type Overview,
+  type OverviewRangeId,
+  type OverviewResult,
+  type OverviewWarmup,
+  timelineWindow,
+} from "@/features/overview/lib/overview";
 import { appHref } from "@/lib/navigation";
 
 const legendSwatches: Record<CadenceEventState, string> = {
@@ -34,57 +43,143 @@ const legendSwatches: Record<CadenceEventState, string> = {
   warmup: "bg-warmup-surface",
 };
 
-type OverviewWarmup = {
-  active: number;
-  todaySent: number;
-  todayTarget: number;
-};
-
 type OverviewScreenProps = {
   firstName: string;
+  range: OverviewRangeId;
+  timezone: string;
+  result: OverviewResult;
   warmup: OverviewWarmup | null;
 };
 
-function lanesWith(warmup: OverviewWarmup | null): CadenceLane[] {
-  return cadenceLanes.map((lane) =>
-    lane.id === warmupLaneId
-      ? {
-          ...lane,
-          events:
-            warmup && warmup.active > 0
-              ? [
-                  {
-                    id: "warm-up-mailboxes",
-                    label: warmupLaneLabel(
-                      warmup.active,
-                      warmup.todaySent,
-                      warmup.todayTarget,
-                    ),
-                    start: cadenceCard.startHour,
-                    end: warmupLaneEndHour,
-                    state: "warmup" as const,
-                  },
-                ]
-              : [],
-        }
-      : lane,
-  );
-}
+export function OverviewScreen({
+  firstName,
+  range,
+  timezone,
+  result,
+  warmup,
+}: OverviewScreenProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [navigating, startNavigation] = useTransition();
+  const [retrying, startRetry] = useTransition();
+  const [picked, setPicked] = useState(range);
+  const [fresh, setFresh] = useState<Overview | null>(null);
+  const loaded = result.state === "ready" ? result.overview : null;
 
-export function OverviewScreen({ firstName, warmup }: OverviewScreenProps) {
+  useEffect(() => {
+    setPicked(range);
+  }, [range]);
+
+  useTimezoneSync(timezone);
+
+  const handleFresh = useCallback((overview: Overview) => {
+    setFresh(overview);
+  }, []);
+  useOverviewRefresh(range, timezone, handleFresh);
+
+  const overview =
+    loaded &&
+    fresh &&
+    fresh.range === loaded.range &&
+    fresh.timezone === loaded.timezone &&
+    fresh.generatedAt > loaded.generatedAt
+      ? fresh
+      : (loaded ?? (fresh?.range === range ? fresh : null));
+
+  function changeRange(next: OverviewRangeId) {
+    setPicked(next);
+    startNavigation(() => {
+      router.replace(
+        next === defaultOverviewRange ? pathname : `${pathname}?range=${next}`,
+        { scroll: false },
+      );
+    });
+  }
+
+  if (!overview) {
+    return (
+      <div className="flex min-w-0 flex-col gap-[18px] text-[13px] leading-normal">
+        <PageHeader title={copy.title} />
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+          <LoadFailed
+            title={copy.failed.title}
+            body={copy.failed.body}
+            retryLabel={copy.failed.retry}
+            pending={retrying}
+            onRetry={() => startRetry(() => router.refresh())}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const { summary, today } = overview;
+  const title = copy.greeting(dayPart(today.nowHour), firstName);
+  const alert = overview.alert ? (
+    <DeliverabilityAlert alert={overview.alert} range={overview.range} />
+  ) : null;
+  const mailboxes = (
+    <OverviewCard
+      id="overview-mailboxes"
+      title={copy.mailboxes.title}
+      description={copy.mailboxes.description(overview.mailboxes.length)}
+      action={
+        <CardLink href={appHref(copy.mailboxes.actionPath)}>
+          {copy.mailboxes.actionLabel}
+        </CardLink>
+      }
+    >
+      <MailboxList rows={overview.mailboxes} />
+    </OverviewCard>
+  );
+
+  if (!summary.hasSent && summary.setup) {
+    return (
+      <div className="@container flex min-w-0 flex-col gap-[18px] text-[13px] leading-normal">
+        <PageHeader title={title} description={copy.setup.description} />
+        {alert}
+        <GettingStarted setup={summary.setup} />
+        {overview.mailboxes.length > 0 ? mailboxes : null}
+      </div>
+    );
+  }
+
+  const lanes = cadenceLanes(today, warmup, copy.cadence.lanes);
+  const window = timelineWindow(today);
+
   return (
     <div className="@container flex min-w-0 flex-col gap-[18px] text-[13px] leading-normal">
-      <OverviewSummary firstName={firstName}>
-        <DeliverabilityAlert />
-      </OverviewSummary>
+      <PageHeader
+        title={title}
+        description={copy.description(summary.running, summary.scheduledToday)}
+        actions={
+          <>
+            {navigating ? (
+              <span role="status" className="text-muted-foreground">
+                <Spinner />
+                <span className="sr-only">{copy.refreshing}</span>
+              </span>
+            ) : null}
+            <RangeSwitch value={picked} onValueChange={changeRange} />
+          </>
+        }
+      />
+      {alert}
+      <StatRow
+        stats={overview.stats}
+        range={overview.range}
+        pending={navigating}
+      />
 
       <OverviewCard
         id="overview-cadence"
-        title={cadenceCard.title}
-        description={cadenceCard.description}
+        title={copy.cadence.title}
+        description={
+          hasCadence(lanes) ? copy.cadence.description : copy.cadence.empty
+        }
         action={
           <ul className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-muted-foreground">
-            {cadenceLegend.map((item) => (
+            {copy.cadence.legend.map((item) => (
               <li key={item.state} className="flex items-center gap-1.5">
                 <span
                   aria-hidden="true"
@@ -100,42 +195,28 @@ export function OverviewScreen({ firstName, warmup }: OverviewScreenProps) {
         }
       >
         <CadenceTimeline
-          startHour={cadenceCard.startHour}
-          endHour={cadenceCard.endHour}
-          now={cadenceCard.now}
-          lanes={lanesWith(warmup)}
+          startHour={window.startHour}
+          endHour={window.endHour}
+          now={today.nowHour}
+          lanes={lanes}
         />
       </OverviewCard>
 
       <div className="grid grid-cols-1 items-start gap-[18px] @5xl:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] @[87.5rem]:grid-cols-[minmax(0,1fr)_400px]">
         <OverviewCard
           id="overview-sends"
-          title={sendsCard.title}
-          description={sendsCard.description}
+          title={copy.sends.title}
+          description={copy.sends.description}
           action={
-            <CardLink href={appHref(sendsCard.actionPath)}>
-              {sendsCard.actionLabel}
+            <CardLink href={appHref(copy.sends.actionPath)}>
+              {copy.sends.actionLabel}
             </CardLink>
           }
         >
-          <SendsTable sends={todaySends} />
+          <SendsTable sends={overview.sends} timezone={overview.timezone} />
         </OverviewCard>
-
-        <OverviewCard
-          id="overview-mailboxes"
-          title={mailboxesCard.title}
-          description={mailboxesCard.description}
-          action={
-            <CardLink href={appHref(mailboxesCard.actionPath)}>
-              {mailboxesCard.actionLabel}
-            </CardLink>
-          }
-        >
-          <MailboxList rows={mailboxRows} />
-        </OverviewCard>
+        {mailboxes}
       </div>
-
-      <p className="text-xs text-ink-tertiary">{sampleNotice}</p>
     </div>
   );
 }

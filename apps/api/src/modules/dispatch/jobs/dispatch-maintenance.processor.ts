@@ -1,12 +1,16 @@
 import { InjectQueue, Processor, WorkerHost } from "@nestjs/bullmq";
 import { Inject, Logger, type OnModuleInit } from "@nestjs/common";
 import type { Job, Queue } from "bullmq";
+import { uuidv7Floor } from "../../../common/uuid";
 import { ContentArchive } from "../content-archive";
 import {
   contentRetentionDays,
   DISPATCH_MAINTENANCE_QUEUE,
   idempotencyRetentionHours,
   messageRetentionMonths,
+  SEND_QUEUE,
+  type SendJob,
+  sendJobOptions,
 } from "../dispatch.constants";
 import {
   DispatchRepository,
@@ -16,11 +20,19 @@ import {
 const maintainPartitions = "maintain-partitions";
 const archiveContents = "archive-contents";
 const pruneIdempotencyKeys = "prune-idempotency-keys";
+const requeueStuck = "requeue-stuck";
+const requeueStuckDeep = "requeue-stuck-deep";
 
 const partitionMonthsAhead = 3;
 const hourMs = 60 * 60 * 1000;
 const dayMs = 24 * hourMs;
 const archiveBatchSize = 200;
+const minuteMs = 60 * 1000;
+const requeueBatchSize = 500;
+
+export const stuckAfterMs = 5 * minuteMs;
+export const stuckWindowMs = hourMs;
+export const stuckDeepWindowMs = 7 * dayMs;
 
 function partitionEnd(table: PartitionedTable, name: string) {
   const match = new RegExp(`^${table}_(\\d{4})_(\\d{2})$`).exec(name);
@@ -38,6 +50,7 @@ export class DispatchMaintenanceProcessor
 
   constructor(
     @InjectQueue(DISPATCH_MAINTENANCE_QUEUE) private readonly queue: Queue,
+    @InjectQueue(SEND_QUEUE) private readonly sendQueue: Queue<SendJob>,
     @Inject(DispatchRepository) private readonly repository: DispatchRepository,
     @Inject(ContentArchive) private readonly archive: ContentArchive,
   ) {
@@ -60,6 +73,16 @@ export class DispatchMaintenanceProcessor
       { every: hourMs },
       { name: pruneIdempotencyKeys },
     );
+    await this.queue.upsertJobScheduler(
+      requeueStuck,
+      { every: stuckAfterMs },
+      { name: requeueStuck, opts: { attempts: 1 } },
+    );
+    await this.queue.upsertJobScheduler(
+      requeueStuckDeep,
+      { every: dayMs },
+      { name: requeueStuckDeep, opts: { attempts: 1 } },
+    );
   }
 
   async process(job: Job) {
@@ -69,6 +92,12 @@ export class DispatchMaintenanceProcessor
     if (job.name === archiveContents) {
       return this.archiveContents();
     }
+    if (job.name === requeueStuck) {
+      return this.requeueStuck(stuckWindowMs);
+    }
+    if (job.name === requeueStuckDeep) {
+      return this.requeueStuck(stuckDeepWindowMs);
+    }
     if (job.name === pruneIdempotencyKeys) {
       await this.repository.deleteIdempotencyKeysBefore(
         new Date(Date.now() - idempotencyRetentionHours * hourMs),
@@ -77,10 +106,14 @@ export class DispatchMaintenanceProcessor
     return null;
   }
 
-  private async maintainPartitions() {
+  async maintainPartitions() {
     await this.repository.ensurePartitions("messages", partitionMonthsAhead);
     await this.repository.ensurePartitions(
       "message_contents",
+      partitionMonthsAhead,
+    );
+    await this.repository.ensurePartitions(
+      "message_events",
       partitionMonthsAhead,
     );
     const now = new Date();
@@ -92,14 +125,51 @@ export class DispatchMaintenanceProcessor
       ),
     );
     const dropped: string[] = [];
-    for (const name of await this.repository.listPartitions("messages")) {
-      const end = partitionEnd("messages", name);
-      if (end && end <= cutoff) {
-        await this.repository.dropPartition("messages", name);
-        dropped.push(name);
+    for (const table of ["message_events", "messages"] as const) {
+      for (const name of await this.repository.listPartitions(table)) {
+        const end = partitionEnd(table, name);
+        if (end && end <= cutoff) {
+          await this.repository.dropPartition(table, name);
+          dropped.push(name);
+        }
       }
     }
     return { dropped };
+  }
+
+  async requeueStuck(windowMs: number, now = new Date()) {
+    const to = new Date(now.getTime() - stuckAfterMs);
+    const from = new Date(to.getTime() - windowMs);
+    const window = {
+      from,
+      to,
+      fromId: uuidv7Floor(from),
+      toId: uuidv7Floor(to),
+    };
+    let after: string | null = null;
+    let checked = 0;
+    for (;;) {
+      const rows = await this.repository.listQueuedBetween(
+        window,
+        after,
+        requeueBatchSize,
+      );
+      if (rows.length === 0) {
+        return { checked };
+      }
+      await this.sendQueue.addBulk(
+        rows.map((row) => ({
+          name: "send",
+          data: {
+            messageId: row.id,
+            createdAt: row.createdAt.toISOString(),
+          },
+          opts: { ...sendJobOptions, jobId: row.id },
+        })),
+      );
+      checked += rows.length;
+      after = rows.at(-1)?.id ?? null;
+    }
   }
 
   async archiveContents() {
@@ -139,7 +209,13 @@ export class DispatchMaintenanceProcessor
             row.workspace_id,
             row.message_id,
             new Date(row.created_at),
-            { html: row.html, text: row.text, headers: row.headers ?? {} },
+            {
+              html: row.html,
+              text: row.text,
+              headers: row.headers ?? {},
+              snapshotId: row.snapshot_id,
+              variables: row.variables,
+            },
           ),
         ),
       );

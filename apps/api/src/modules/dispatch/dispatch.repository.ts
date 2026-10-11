@@ -1,14 +1,73 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, type Db, desc, eq, lt, or, schema, sql } from "@workspace/db";
+import {
+  and,
+  type Db,
+  desc,
+  eq,
+  gte,
+  inArray,
+  lt,
+  or,
+  schema,
+  sql,
+} from "@workspace/db";
 import { DATABASE } from "../../infra/database/database.module";
+import type { MessageEventType } from "./dispatch.constants";
 
-const { messageContents, messageIdempotencyKeys, messages, sendingSources } =
-  schema;
+const {
+  contentSnapshots,
+  messageContents,
+  messageEvents,
+  messageIdempotencyKeys,
+  messages,
+  sendingSources,
+} = schema;
 
 export type MessageRow = typeof messages.$inferSelect;
 export type NewMessageRow = typeof messages.$inferInsert;
 export type MessageContentRow = typeof messageContents.$inferSelect;
 export type NewMessageContentRow = typeof messageContents.$inferInsert;
+
+export type SnapshotRow = typeof contentSnapshots.$inferSelect;
+export type MessageEventRow = typeof messageEvents.$inferSelect;
+
+export type BatchInsertRow = {
+  message: NewMessageRow & { id: string; createdAt: Date };
+  content: NewMessageContentRow | null;
+  idempotency: { key: string; requestHash: string };
+};
+
+export type EventWrite = {
+  messageId: string;
+  messageCreatedAt: Date;
+  eventId: string;
+  impliedEventId: string;
+  eventCreatedAt: Date;
+  type: MessageEventType;
+  occurredAt: Date;
+  url: string | null;
+  userAgent: string | null;
+  metadata: Record<string, string> | null;
+  patch?: Partial<NewMessageRow>;
+  error?: { code: string; message: string };
+  expectedStatus?: string[];
+  touchLastEvent: boolean;
+};
+
+export type EventResult = {
+  workspaceId: string;
+  first: boolean;
+  impliedOpen: boolean;
+};
+
+const deliveryRank: Partial<Record<MessageEventType, number>> = {
+  sent: 1,
+  delayed: 2,
+  delivered: 3,
+  failed: 4,
+  bounced: 5,
+  complained: 6,
+};
 
 export type MessageListRow = MessageRow & {
   sourceName: string;
@@ -21,13 +80,40 @@ export type MessageListQuery = {
   workspaceId: string;
   status?: string;
   sourceId?: string;
+  campaignId?: string;
+  sequenceId?: string;
+  enrollmentId?: string;
+  contactId?: string;
   cursor?: MessageCursor;
   limit: number;
 };
 
-export type PartitionedTable = "messages" | "message_contents";
+export type EngagementTotalsRow = {
+  current: boolean;
+  sent: number;
+  delivered: number;
+  bounced: number;
+  complained: number;
+  trackedSent: number;
+  trackedDelivered: number;
+  opened: number;
+  sequenceSent: number;
+  sequenceDelivered: number;
+  replied: number;
+};
 
-const partitionedTables: PartitionedTable[] = ["messages", "message_contents"];
+export type HourlyKindRow = { kind: string; hour: number; count: number };
+
+export type PartitionedTable =
+  | "messages"
+  | "message_contents"
+  | "message_events";
+
+const partitionedTables: PartitionedTable[] = [
+  "messages",
+  "message_contents",
+  "message_events",
+];
 const idempotencyConstraint = "message_idempotency_keys_pk";
 
 function assertPartitionedTable(
@@ -78,6 +164,352 @@ export class DispatchRepository {
         await tx.insert(messageContents).values(content);
       }
     });
+  }
+
+  async insertBatch(rows: BatchInsertRow[]) {
+    if (rows.length === 0) {
+      return new Set<string>();
+    }
+    return this.db.transaction(async (tx) => {
+      const won = await tx
+        .insert(messageIdempotencyKeys)
+        .values(
+          rows.map((row) => ({
+            workspaceId: row.message.workspaceId,
+            key: row.idempotency.key,
+            requestHash: row.idempotency.requestHash,
+            messageId: row.message.id,
+            messageCreatedAt: row.message.createdAt,
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ messageId: messageIdempotencyKeys.messageId });
+      const inserted = new Set(won.map((row) => row.messageId));
+      const accepted = rows.filter((row) => inserted.has(row.message.id));
+      if (accepted.length === 0) {
+        return inserted;
+      }
+      await tx.insert(messages).values(accepted.map((row) => row.message));
+      const contents = accepted.flatMap((row) =>
+        row.content ? [row.content] : [],
+      );
+      if (contents.length > 0) {
+        await tx.insert(messageContents).values(contents);
+      }
+      return inserted;
+    });
+  }
+
+  async findIdempotencyKeys(workspaceId: string, keys: string[]) {
+    if (keys.length === 0) {
+      return [];
+    }
+    return this.db
+      .select({
+        key: messageIdempotencyKeys.key,
+        messageId: messageIdempotencyKeys.messageId,
+        status: messages.status,
+      })
+      .from(messageIdempotencyKeys)
+      .leftJoin(
+        messages,
+        and(
+          eq(messages.id, messageIdempotencyKeys.messageId),
+          eq(messages.createdAt, messageIdempotencyKeys.messageCreatedAt),
+        ),
+      )
+      .where(
+        and(
+          eq(messageIdempotencyKeys.workspaceId, workspaceId),
+          inArray(messageIdempotencyKeys.key, keys),
+        ),
+      );
+  }
+
+  async insertSnapshot(snapshot: typeof contentSnapshots.$inferInsert) {
+    const [row] = await this.db
+      .insert(contentSnapshots)
+      .values(snapshot)
+      .returning({ id: contentSnapshots.id });
+    if (!row) {
+      throw new Error("The content snapshot was not saved.");
+    }
+    return row;
+  }
+
+  async findSnapshot(workspaceId: string, id: string) {
+    const [row] = await this.db
+      .select()
+      .from(contentSnapshots)
+      .where(
+        and(
+          eq(contentSnapshots.workspaceId, workspaceId),
+          eq(contentSnapshots.id, id),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  async applyEvent(write: EventWrite): Promise<EventResult | null> {
+    const at = write.occurredAt.toISOString();
+    const rank = deliveryRank[write.type];
+    const currentRank = sql`case ${messages.status} when 'sent' then 1 when 'delayed' then 2 when 'delivered' then 3 when 'failed' then 4 when 'bounced' then 5 when 'complained' then 6 else 0 end`;
+    const advance =
+      rank === undefined
+        ? null
+        : sql`${currentRank} < ${sql.raw(String(rank))}`;
+    const firstAt = (column: unknown) =>
+      sql`coalesce(${column}, ${at}::timestamptz)`;
+    const { error } = write;
+    const changes = {
+      updatedAt: new Date(),
+      ...(advance
+        ? {
+            status: sql`case when ${advance} then ${write.type}::text else ${messages.status} end`,
+          }
+        : {}),
+      ...(advance && error
+        ? {
+            errorCode: sql`case when ${advance} then ${error.code}::text else ${messages.errorCode} end`,
+            errorMessage: sql`case when ${advance} then ${error.message}::text else ${messages.errorMessage} end`,
+          }
+        : {}),
+      ...(write.touchLastEvent
+        ? {
+            lastEventAt: sql`greatest(${messages.lastEventAt}, ${at}::timestamptz)`,
+          }
+        : {}),
+      ...(write.type === "opened"
+        ? {
+            openCount: sql`${messages.openCount} + 1`,
+            firstOpenedAt: firstAt(messages.firstOpenedAt),
+          }
+        : {}),
+      ...(write.type === "clicked"
+        ? {
+            clickCount: sql`${messages.clickCount} + 1`,
+            firstClickedAt: firstAt(messages.firstClickedAt),
+            openCount: sql`greatest(${messages.openCount}, 1)`,
+            firstOpenedAt: firstAt(messages.firstOpenedAt),
+          }
+        : {}),
+      ...(write.type === "replied"
+        ? { repliedAt: firstAt(messages.repliedAt) }
+        : {}),
+      ...(write.type === "unsubscribed"
+        ? { unsubscribedAt: firstAt(messages.unsubscribedAt) }
+        : {}),
+      ...write.patch,
+    };
+    return this.db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(messages)
+        .set(changes)
+        .where(
+          and(
+            eq(messages.id, write.messageId),
+            eq(messages.createdAt, write.messageCreatedAt),
+            write.expectedStatus
+              ? sql`${messages.status} = any(${sql.param(write.expectedStatus)}::text[])`
+              : undefined,
+          ),
+        )
+        .returning({
+          workspaceId: messages.workspaceId,
+          previousOpenCount: sql<number>`old.open_count`,
+        });
+      if (!updated) {
+        return null;
+      }
+      const event = {
+        createdAt: write.eventCreatedAt,
+        workspaceId: updated.workspaceId,
+        messageId: write.messageId,
+        messageCreatedAt: write.messageCreatedAt,
+      };
+      const [inserted] = await tx
+        .insert(messageEvents)
+        .values({
+          ...event,
+          id: write.eventId,
+          type: write.type,
+          url: write.url,
+          userAgent: write.userAgent,
+          metadata: write.metadata,
+        })
+        .returning({
+          first: sql<boolean>`not exists (
+            select 1 from message_events earlier
+            where earlier.message_id = ${write.messageId}::uuid
+              and earlier.created_at >= ${write.messageCreatedAt.toISOString()}::timestamptz
+              and earlier.type = ${write.type}
+              and earlier.id <> ${write.eventId}::uuid
+          )`,
+        });
+      const impliedOpen =
+        write.type === "clicked" && Number(updated.previousOpenCount) === 0;
+      if (impliedOpen) {
+        await tx.insert(messageEvents).values({
+          ...event,
+          id: write.impliedEventId,
+          type: "opened",
+          userAgent: write.userAgent,
+          metadata: { implied: "clicked" },
+        });
+      }
+      return {
+        workspaceId: updated.workspaceId,
+        first: inserted?.first === true,
+        impliedOpen,
+      };
+    });
+  }
+
+  async countByStatus(
+    workspaceId: string,
+    scope: {
+      campaignId?: string;
+      sequenceId?: string;
+      sourceId?: string;
+      since?: Date;
+    },
+  ) {
+    return this.db
+      .select({
+        status: messages.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.workspaceId, workspaceId),
+          scope.campaignId
+            ? eq(messages.campaignId, scope.campaignId)
+            : undefined,
+          scope.sequenceId
+            ? eq(messages.sequenceId, scope.sequenceId)
+            : undefined,
+          scope.sourceId ? eq(messages.sourceId, scope.sourceId) : undefined,
+          scope.since ? gte(messages.createdAt, scope.since) : undefined,
+        ),
+      )
+      .groupBy(messages.status);
+  }
+
+  async engagementTotals(
+    workspaceId: string,
+    window: { from: Date; split: Date; to: Date },
+  ): Promise<EngagementTotalsRow[]> {
+    const sent = sql`${messages.status} in ('sent', 'delivered', 'delayed', 'bounced', 'complained')`;
+    const delivered = sql`${messages.status} in ('delivered', 'complained')`;
+    const sequence = sql`${messages.kind} = 'sequence'`;
+    return this.db
+      .select({
+        current: sql<boolean>`${messages.createdAt} >= ${window.split.toISOString()}::timestamptz`,
+        sent: sql<number>`(count(*) filter (where ${sent}))::int`,
+        delivered: sql<number>`(count(*) filter (where ${delivered}))::int`,
+        bounced: sql<number>`(count(*) filter (where ${messages.status} = 'bounced'))::int`,
+        complained: sql<number>`(count(*) filter (where ${messages.status} = 'complained'))::int`,
+        trackedSent: sql<number>`(count(*) filter (where ${messages.trackOpens} and ${sent}))::int`,
+        trackedDelivered: sql<number>`(count(*) filter (where ${messages.trackOpens} and ${delivered}))::int`,
+        opened: sql<number>`(count(*) filter (where ${messages.trackOpens} and ${messages.firstOpenedAt} is not null))::int`,
+        sequenceSent: sql<number>`(count(*) filter (where ${sequence} and ${sent}))::int`,
+        sequenceDelivered: sql<number>`(count(*) filter (where ${sequence} and ${delivered}))::int`,
+        replied: sql<number>`(count(*) filter (where ${sequence} and ${messages.repliedAt} is not null))::int`,
+      })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.workspaceId, workspaceId),
+          gte(messages.createdAt, window.from),
+          lt(messages.createdAt, window.to),
+          sql`${messages.kind} <> 'test'`,
+        ),
+      )
+      .groupBy(sql`1`);
+  }
+
+  async hourlyByKind(
+    workspaceId: string,
+    window: { from: Date; to: Date; timezone: string; kinds: string[] },
+  ): Promise<HourlyKindRow[]> {
+    return this.db
+      .select({
+        kind: messages.kind,
+        hour: sql<number>`extract(hour from ${messages.createdAt} at time zone ${window.timezone})::int`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.workspaceId, workspaceId),
+          gte(messages.createdAt, window.from),
+          lt(messages.createdAt, window.to),
+          inArray(messages.kind, window.kinds),
+          sql`${messages.status} in ('sent', 'delivered', 'delayed', 'bounced', 'complained')`,
+        ),
+      )
+      .groupBy(sql`1`, sql`2`);
+  }
+
+  async hasMessages(workspaceId: string) {
+    const [row] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.workspaceId, workspaceId),
+          sql`${messages.kind} <> 'test'`,
+        ),
+      )
+      .limit(1);
+    return row !== undefined;
+  }
+
+  async listEvents(
+    workspaceId: string,
+    messageId: string,
+    messageCreatedAt: Date,
+    limit: number,
+  ) {
+    return this.db
+      .select()
+      .from(messageEvents)
+      .where(
+        and(
+          eq(messageEvents.messageId, messageId),
+          eq(messageEvents.workspaceId, workspaceId),
+          gte(messageEvents.createdAt, messageCreatedAt),
+        ),
+      )
+      .orderBy(
+        sql`${messageEvents.createdAt} desc nulls last`,
+        sql`${messageEvents.id} desc nulls last`,
+      )
+      .limit(limit);
+  }
+
+  async listQueuedBetween(
+    window: { from: Date; to: Date; fromId: string; toId: string },
+    afterId: string | null,
+    limit: number,
+  ) {
+    return this.db
+      .select({ id: messages.id, createdAt: messages.createdAt })
+      .from(messages)
+      .where(
+        and(
+          gte(messages.createdAt, window.from),
+          lt(messages.createdAt, window.to),
+          gte(messages.id, window.fromId),
+          lt(messages.id, window.toId),
+          eq(messages.status, "queued"),
+          afterId ? sql`${messages.id} > ${afterId}::uuid` : undefined,
+        ),
+      )
+      .orderBy(messages.id)
+      .limit(limit);
   }
 
   async findIdempotencyKey(workspaceId: string, key: string) {
@@ -148,6 +580,16 @@ export class DispatchRepository {
           eq(messages.workspaceId, query.workspaceId),
           query.status ? eq(messages.status, query.status) : undefined,
           query.sourceId ? eq(messages.sourceId, query.sourceId) : undefined,
+          query.campaignId
+            ? eq(messages.campaignId, query.campaignId)
+            : undefined,
+          query.sequenceId
+            ? eq(messages.sequenceId, query.sequenceId)
+            : undefined,
+          query.enrollmentId
+            ? eq(messages.enrollmentId, query.enrollmentId)
+            : undefined,
+          query.contactId ? eq(messages.contactId, query.contactId) : undefined,
           cursor
             ? or(
                 lt(messages.createdAt, cursor.createdAt),
@@ -278,8 +720,10 @@ export class DispatchRepository {
       html: string | null;
       text: string | null;
       headers: Record<string, string> | null;
+      snapshot_id: string | null;
+      variables: Record<string, string> | null;
     }>(sql`
-      select message_id, created_at, workspace_id, html, text, headers
+      select message_id, created_at, workspace_id, html, text, headers, snapshot_id, variables
       from ${table}
       where ${afterMessageId}::uuid is null or message_id > ${afterMessageId}::uuid
       order by message_id

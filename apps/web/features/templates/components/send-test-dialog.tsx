@@ -15,8 +15,7 @@ import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { focusRing } from "@/components/app-shell/page-header";
-import type { Option } from "@/components/product/option";
-import { OptionCombobox } from "@/components/product/option-combobox";
+import { SourceCombobox } from "@/components/pickers/source-combobox";
 import {
   dialogActionsClass,
   dialogTitleClass,
@@ -30,6 +29,7 @@ import type { ExportedEmail } from "@/features/templates/lib/editor";
 import { isEmail } from "@/features/templates/lib/templates";
 import { sendTestEmail } from "@/features/templates/queries/client";
 import { appHref } from "@/lib/navigation";
+import type { SourceChoice } from "@/lib/sources";
 
 const text = copy.testDialog;
 
@@ -37,7 +37,7 @@ type SendTestDialogProps = {
   open: boolean;
   defaultTo: string;
   subject: string;
-  sources: Option[];
+  sources: SourceChoice[];
   exportEmail: () => Promise<ExportedEmail | null>;
   onOpenChange: (open: boolean) => void;
 };
@@ -214,13 +214,12 @@ export function SendTestDialog({
                 <FieldLabel htmlFor="test-source" className="text-[13px]">
                   {text.source}
                 </FieldLabel>
-                <OptionCombobox
+                <SourceCombobox
                   id="test-source"
-                  options={sources}
+                  sources={sources}
                   value={sourceId}
                   label={text.source}
                   placeholder={text.sourcePlaceholder}
-                  empty={text.sourceEmpty}
                   disabled={pending}
                   describedBy="test-source-hint"
                   onChange={(next) => {
@@ -228,7 +227,6 @@ export function SendTestDialog({
                     setNeedFrom(false);
                     setFromError(null);
                   }}
-                  className="w-full"
                 />
                 <p
                   id="test-source-hint"

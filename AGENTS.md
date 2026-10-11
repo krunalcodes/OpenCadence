@@ -69,6 +69,7 @@ Decided. Use these; do not introduce alternatives without asking.
 | Data tables | TanStack Table (React Table) |
 | AI features | Vercel AI SDK through `@ai-sdk/openai-compatible`; each workspace adds its own endpoint, model, and key in settings |
 | Email editor | `@react-email/editor` (one editor for rich text and layout); templates store its document plus exported HTML and text |
+| Sequence builder | React Flow (`@xyflow/react`); steps stay an ordered list, the canvas is a view of it |
 | Sending integrations | Resend and Amazon SES first; then Gmail, Outlook, IMAP/SMTP mailboxes and SendGrid-style providers, all behind the adapter interface |
 | Authentication | Better Auth (`@workspace/auth`), served by the API at `/api/auth` and proxied by Next; email and password, Google, and the organization (workspaces), two-factor, API key (workspace-owned), Have I Been Pwned and last login method plugins |
 | System email | React Email with Tailwind (`@workspace/email`); Resend and console providers |

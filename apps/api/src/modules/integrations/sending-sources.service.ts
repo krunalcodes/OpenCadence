@@ -307,6 +307,10 @@ export class SendingSourcesService {
     return Boolean(this.adapters.find(integrationType)?.inbox);
   }
 
+  canDetectReplies(integrationType: string) {
+    return Boolean(this.adapters.find(integrationType)?.inbox?.listReceived);
+  }
+
   async gmailAuthorizeUrl(actor: Actor, input: { dailySendLimit?: unknown }) {
     const adapter = this.adapters.find("gmail");
     if (!adapter?.oauth) {

@@ -22,3 +22,16 @@ export function uuidv7Date(id: string) {
   }
   return new Date(Number.parseInt(id.replaceAll("-", "").slice(0, 12), 16));
 }
+
+export function messageCreatedAt(id: string) {
+  const date = uuidv7Date(id);
+  if (!date) {
+    throw new Error("The id is not a UUIDv7.");
+  }
+  return date;
+}
+
+export function uuidv7Floor(date: Date) {
+  const hex = Math.max(date.getTime(), 0).toString(16).padStart(12, "0");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-7000-8000-000000000000`;
+}

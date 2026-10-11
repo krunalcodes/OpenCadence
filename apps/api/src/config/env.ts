@@ -22,6 +22,7 @@ export type Env = {
   GMAIL_CLIENT_SHARED: boolean;
   WEBHOOK_BASE_URL?: string;
   MEDIA_BASE_URL: string;
+  TRACKING_BASE_URL: string;
   BULL_BOARD_USERNAME?: string;
   BULL_BOARD_PASSWORD?: string;
   S3_ENDPOINT: string;
@@ -193,6 +194,28 @@ function mediaBaseUrl(config: Record<string, unknown>, webUrl: string) {
   return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
 }
 
+function trackingBaseUrl(config: Record<string, unknown>, webUrl: string) {
+  const raw =
+    optional(config, "TRACKING_BASE_URL")?.trim() ??
+    `${webUrl.trim().replace(/\/+$/, "")}/api/v1`;
+  const message =
+    "TRACKING_BASE_URL must be an http or https address that mail clients can reach, for example https://mail.example.com/api/v1.";
+  if (!URL.canParse(raw)) {
+    throw new Error(message);
+  }
+  const url = new URL(raw);
+  if (
+    (url.protocol !== "https:" && url.protocol !== "http:") ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    url.username !== "" ||
+    url.password !== ""
+  ) {
+    throw new Error(message);
+  }
+  return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
+}
+
 function forcePathStyle(config: Record<string, unknown>) {
   const raw = optional(config, "S3_FORCE_PATH_STYLE")?.trim().toLowerCase();
   if (raw === undefined || raw === "true") {
@@ -282,6 +305,10 @@ export function validateEnv(config: Record<string, unknown>) {
     GMAIL_CLIENT_SHARED: gmailClientShared,
     WEBHOOK_BASE_URL: webhookBaseUrl(config),
     MEDIA_BASE_URL: mediaBaseUrl(config, required(config, "BETTER_AUTH_URL")),
+    TRACKING_BASE_URL: trackingBaseUrl(
+      config,
+      required(config, "BETTER_AUTH_URL"),
+    ),
     BULL_BOARD_USERNAME: bullBoardUsername,
     BULL_BOARD_PASSWORD: bullBoardPassword,
     S3_ENDPOINT:

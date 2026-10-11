@@ -1,0 +1,273 @@
+.oc-flow.react-flow {
+  --xy-background-color: var(--background);
+  --xy-background-pattern-color: color-mix(
+    in srgb,
+    var(--ink-tertiary, var(--muted-foreground)) 38%,
+    transparent
+  );
+  --xy-edge-stroke: color-mix(
+    in srgb,
+    var(--ink-tertiary, var(--muted-foreground)) 62%,
+    transparent
+  );
+  --xy-edge-stroke-width: 1.5;
+  --xy-edge-stroke-selected: var(--primary);
+  --xy-connectionline-stroke: var(--primary);
+  --xy-node-color: var(--foreground);
+  --xy-node-border: 0;
+  --xy-node-border-selected: 0;
+  --xy-handle-background-color: transparent;
+  --xy-selection-background-color: color-mix(
+    in srgb,
+    var(--primary) 8%,
+    transparent
+  );
+  --xy-selection-border: 1px solid
+    color-mix(in srgb, var(--primary) 45%, transparent);
+  --xy-attribution-background-color: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+
+.oc-flow .react-flow__handle {
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.oc-flow .react-flow__node {
+  border-radius: 12px;
+  outline: none;
+}
+
+.oc-flow .react-flow__node.draggable {
+  cursor: pointer;
+}
+
+.oc-flow .react-flow__node.draggable.dragging {
+  cursor: grabbing;
+}
+
+.oc-flow .react-flow__node:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.oc-flow .react-flow__edge {
+  cursor: default;
+}
+
+.oc-flow .react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.oc-flow .oc-flow-tail {
+  stroke-dasharray: 3 5;
+}
+
+.oc-flow-start {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  cursor: default;
+}
+
+.oc-flow-step {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 1px 2px rgb(20 32 27 / 0.05);
+  transition:
+    border-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.oc-flow-step:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--ink-tertiary, var(--muted-foreground)) 70%,
+    var(--border)
+  );
+}
+
+.oc-flow-step[data-problem] {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+}
+
+.oc-flow-step[data-selected] {
+  border-color: var(--primary);
+  box-shadow:
+    0 0 0 1px var(--primary),
+    0 6px 16px -8px rgb(20 32 27 / 0.22);
+}
+
+.oc-flow-step[data-dragging] {
+  box-shadow: 0 14px 28px -14px rgb(20 32 27 / 0.3);
+}
+
+.oc-flow-step-number {
+  display: grid;
+  height: 20px;
+  min-width: 20px;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--border-subtle, var(--muted));
+  padding: 0 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+.oc-flow-step[data-selected] .oc-flow-step-number {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.oc-flow-add {
+  pointer-events: all;
+  display: flex;
+  height: 100%;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 12px;
+  border: 1px dashed
+    color-mix(
+      in srgb,
+      var(--ink-tertiary, var(--muted-foreground)) 60%,
+      transparent
+    );
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.oc-flow-add:hover:not(:disabled) {
+  border-style: solid;
+  border-color: var(--primary);
+  background: var(--card);
+  color: var(--primary);
+}
+
+.oc-flow-add:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.oc-flow-edge-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: all;
+}
+
+.oc-flow-wait {
+  display: inline-flex;
+  height: 26px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 0 10px 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  box-shadow: 0 1px 2px rgb(20 32 27 / 0.05);
+  cursor: pointer;
+  transition:
+    border-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.oc-flow-wait:hover,
+.oc-flow-wait[data-popup-open] {
+  border-color: var(--primary);
+  color: var(--foreground);
+}
+
+.oc-flow-insert {
+  display: grid;
+  height: 20px;
+  width: 20px;
+  place-items: center;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.oc-flow-insert:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  transform: scale(1.12);
+}
+
+.oc-flow-insert:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.oc-flow-wait:focus-visible,
+.oc-flow-insert:focus-visible,
+.oc-flow-add:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.oc-flow .react-flow__panel {
+  margin: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oc-flow-step,
+  .oc-flow-add,
+  .oc-flow-wait,
+  .oc-flow-insert {
+    transition: none;
+  }
+
+  .oc-flow-insert:hover:not(:disabled) {
+    transform: none;
+  }
+}

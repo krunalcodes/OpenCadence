@@ -101,6 +101,7 @@ apps/api/
 │   │   ├── queue/                 BullMQ and the queue dashboard      (exists)
 │   │   ├── storage/               S3-compatible object storage        (exists)
 │   │   ├── crypto/                credential encryption               (exists)
+│   │   ├── tracking-keys/         signing key and public address for tracking links (exists)
 │   │   ├── i18n/
 │   │   └── logger/
 │   └── modules/                   one folder per domain
@@ -121,17 +122,17 @@ apps/api/
 │       ├── media/                 uploaded images and their public addresses (exists)
 │       ├── brand/                 brand settings used by emails and the assistant (exists)
 │       ├── ai/                    writing assistant                   (exists)
-│       ├── campaigns/
-│       ├── sequences/
+│       ├── campaigns/ (exists)
+│       ├── sequences/ (exists)
 │       ├── transactional/         the send-one-email API              (exists)
 │       ├── inbox/                 unified reply inbox
 │       ├── integrations/          connected mailboxes and providers   (exists)
 │       ├── domains/               sending and tracking domains, DNS checks
 │       ├── warmup/ (exists)
 │       ├── dispatch/              the send pipeline: limits, rotation, retries (exists)
-│       ├── tracking/              open, click, and unsubscribe endpoints
+│       ├── tracking/              open, click, and unsubscribe endpoints (exists)
 │       ├── provider-events/       inbound bounce and complaint webhooks (exists)
-│       ├── analytics/             dashboards and reports
+│       ├── analytics/             dashboards and reports              (exists)
 │       ├── webhooks/              outbound webhooks
 │       └── archive/               public newsletter archive and RSS
 └── test/                          end-to-end tests                    (exists)
@@ -206,9 +207,9 @@ apps/web/
 │   │       ├── integrations/
 │   │       ├── domains/
 │   │       └── settings/
-│   └── (public)/                  pages for subscribers, no sign-in
+│   └── (public)/                  pages for subscribers, no sign-in    (exists)
 │       ├── subscribe/
-│       ├── unsubscribe/
+│       ├── unsubscribe/                                               (exists)
 │       ├── preferences/
 │       └── archive/
 ├── features/                      one folder per domain, named like the API
@@ -225,6 +226,7 @@ apps/web/
 ├── components/                    composed UI shared across features  (exists)
 │   ├── app-shell/                 rail, area panel, top bar, command palette (exists)
 │   ├── command-palette/
+│   ├── pickers/                   sending source, template, and audience pickers (exists)
 │   └── data-table/                TanStack Table wrapper, filters, bulk bar
 ├── hooks/                         hooks shared across features        (exists)
 ├── lib/                           API client setup, query client, auth, i18n (exists)

@@ -50,6 +50,13 @@
       "when": 1791713531009,
       "tag": "0006_thick_green_goblin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791715753138,
+      "tag": "0007_closed_lethal_legion",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,10 @@
 import type { PasswordCredentials } from "@workspace/integration-core";
-import type { ImapFlowOptions, SearchObject } from "imapflow";
+import type {
+  FetchQueryObject,
+  ImapFlowOptions,
+  MessageStructureObject,
+  SearchObject,
+} from "imapflow";
 import type { SendMailOptions, SMTPTransportOptions } from "nodemailer";
 import {
   createImapSmtpAdapter,
@@ -28,6 +33,9 @@ export type FakeMessage = {
   internalDate?: Date;
   from?: { name?: string; address?: string }[];
   to?: { name?: string; address?: string }[];
+  rawHeaders?: string[];
+  bodyStructure?: MessageStructureObject;
+  parts?: Record<string, string>;
 };
 
 export type FakeMailbox = {
@@ -35,6 +43,8 @@ export type FakeMailbox = {
   specialUse?: string;
   messages?: FakeMessage[];
   nextUid?: number;
+  uidValidity?: bigint;
+  hideUidNext?: boolean;
 };
 
 export type SoftMethod = "search" | "messageMove" | "messageFlagsAdd";
@@ -45,6 +55,7 @@ export type HardMethod =
   | "mailboxOpen"
   | "mailboxCreate"
   | "fetchOne"
+  | "fetchAll"
   | "logout";
 
 export type FakeImapSetup = {
@@ -85,6 +96,31 @@ function sameDayOrAfter(date: Date, since: Date) {
   return date.getTime() >= floor;
 }
 
+function uidsInRange(range: string, uids: number[]) {
+  const highest = Math.max(0, ...uids);
+  const bounds = range
+    .split(":")
+    .map((bound) => (bound === "*" ? highest : Number(bound)));
+  const low = Math.min(...bounds);
+  const high = Math.max(...bounds);
+  return uids.filter((uid) => uid >= low && uid <= high);
+}
+
+function headerBlock(message: FakeMessage, wanted: unknown) {
+  const lines = [
+    ...(message.references ? [`References: ${message.references}`] : []),
+    ...(message.rawHeaders ?? []),
+  ];
+  const names = Array.isArray(wanted)
+    ? wanted.map((name) => String(name).toLowerCase())
+    : null;
+  const kept = lines.filter(
+    (line) =>
+      !names || names.includes(line.split(":")[0]?.trim().toLowerCase() ?? ""),
+  );
+  return Buffer.from(`${kept.map((line) => `${line}\r\n`).join("")}\r\n`);
+}
+
 export function createFakeImap(setup: FakeImapSetup = {}) {
   const mailboxes = (
     setup.mailboxes ?? [
@@ -123,6 +159,42 @@ export function createFakeImap(setup: FakeImapSetup = {}) {
       }
       return true;
     };
+    const toFetched = (
+      message: FakeMessage,
+      query: FetchQueryObject,
+    ): ImapFetchedMessage => ({
+      uid: message.uid,
+      flags: new Set(message.flags ?? []),
+      labels: setup.gmail ? new Set(message.labels ?? []) : undefined,
+      envelope: {
+        messageId: message.messageId,
+        inReplyTo: message.inReplyTo,
+        subject: message.subject,
+        from: message.from,
+        to: message.to,
+      },
+      internalDate: message.internalDate,
+      headers: headerBlock(message, query.headers),
+      bodyStructure: query.bodyStructure ? message.bodyStructure : undefined,
+      bodyParts: query.bodyParts
+        ? new Map(
+            query.bodyParts.flatMap((part) => {
+              const key = typeof part === "string" ? part : part.key;
+              const content = message.parts?.[key];
+              const length =
+                typeof part === "string" ? undefined : part.maxLength;
+              return content === undefined
+                ? []
+                : [
+                    [
+                      key.toLowerCase(),
+                      Buffer.from(content).subarray(0, length),
+                    ] as const,
+                  ];
+            }),
+          )
+        : undefined,
+    });
     const client: ImapClient = {
       capabilities: new Map<string, boolean | number>([
         ["IMAP4REV1", true],
@@ -164,7 +236,16 @@ export function createFakeImap(setup: FakeImapSetup = {}) {
             mailboxMissing: true,
           });
         }
-        return { path };
+        return {
+          path,
+          uidValidity: selected.uidValidity ?? 1n,
+          uidNext: selected.hideUidNext
+            ? undefined
+            : Math.max(
+                selected.nextUid,
+                ...selected.messages.map((message) => message.uid + 1),
+              ),
+        };
       },
       mailboxCreate: async (path) => {
         calls.push(["mailboxCreate", path]);
@@ -181,10 +262,18 @@ export function createFakeImap(setup: FakeImapSetup = {}) {
         }
         const wanted = query.header?.["Message-ID"];
         const since = query.since instanceof Date ? query.since : undefined;
+        if (typeof query.uid === "string") {
+          return uidsInRange(
+            query.uid,
+            (selected?.messages ?? []).map((message) => message.uid),
+          );
+        }
         return (selected?.messages ?? [])
           .filter(
             (message) =>
-              typeof wanted === "string" && message.messageId.includes(wanted),
+              (query.header === undefined && since !== undefined) ||
+              (typeof wanted === "string" &&
+                message.messageId.includes(wanted)),
           )
           .filter(
             (message) =>
@@ -202,25 +291,15 @@ export function createFakeImap(setup: FakeImapSetup = {}) {
         if (!message) {
           return false;
         }
-        const fetched: ImapFetchedMessage = {
-          uid: message.uid,
-          flags: new Set(message.flags ?? []),
-          labels: setup.gmail ? new Set(message.labels ?? []) : undefined,
-          envelope: {
-            messageId: message.messageId,
-            inReplyTo: message.inReplyTo,
-            subject: message.subject,
-            from: message.from,
-            to: message.to,
-          },
-          internalDate: message.internalDate,
-          headers: Buffer.from(
-            message.references
-              ? `References: ${message.references}\r\n\r\n`
-              : "\r\n",
-          ),
-        };
-        return fetched;
+        return toFetched(message, query);
+      },
+      fetchAll: async (range, query, fetchOptions) => {
+        calls.push(["fetchAll", selected?.path, range, query, fetchOptions]);
+        hard("fetchAll");
+        const uids = range.split(",");
+        return (selected?.messages ?? [])
+          .filter((entry) => uids.includes(String(entry.uid)))
+          .map((entry) => toFetched(entry, query));
       },
       messageMove: async (range, destination, moveOptions) => {
         calls.push([

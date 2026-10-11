@@ -242,15 +242,7 @@ export class SegmentsService {
     return { count, sample: page.contacts.slice(0, previewSampleSize) };
   }
 
-  private async find(workspaceId: string, id: string) {
-    const row = isUuid(id) ? await this.repository.find(workspaceId, id) : null;
-    if (!row) {
-      throw notFound();
-    }
-    return row;
-  }
-
-  private async currentRules(workspaceId: string, id: string) {
+  async currentRules(workspaceId: string, id: string): Promise<SegmentRules> {
     const row = await this.find(workspaceId, id);
     try {
       return await this.contacts.validateFilter(workspaceId, row.rules);
@@ -267,5 +259,13 @@ export class SegmentsService {
           : "A condition in this segment no longer applies. Edit the segment and save it again.",
       );
     }
+  }
+
+  private async find(workspaceId: string, id: string) {
+    const row = isUuid(id) ? await this.repository.find(workspaceId, id) : null;
+    if (!row) {
+      throw notFound();
+    }
+    return row;
   }
 }

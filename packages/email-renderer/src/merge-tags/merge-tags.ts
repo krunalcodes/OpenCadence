@@ -33,7 +33,7 @@ const htmlEntities: Record<string, string> = {
   "'": "&#39;",
 };
 
-function escapeHtml(value: string) {
+export function escapeHtml(value: string) {
   return value.replace(
     /[&<>"']/g,
     (character) => htmlEntities[character] ?? character,
@@ -59,6 +59,13 @@ export function findMergeTags(input: string): MergeTag[] {
   return tags;
 }
 
+export function mergeTagValue(tag: MergeTag, values: MergeValues): string {
+  const value = Object.hasOwn(values, tag.key) ? values[tag.key] : undefined;
+  const text =
+    value === null || value === undefined ? "" : String(value).trim();
+  return text === "" ? (tag.fallback ?? "") : text;
+}
+
 export function renderMergeTags(
   input: string,
   values: MergeValues,
@@ -69,11 +76,8 @@ export function renderMergeTags(
   let output = "";
   let position = 0;
   for (const tag of findMergeTags(input)) {
-    const value = Object.hasOwn(values, tag.key) ? values[tag.key] : undefined;
-    const text =
-      value === null || value === undefined ? "" : String(value).trim();
     output += input.slice(position, tag.start);
-    output += escapeValue(text === "" ? (tag.fallback ?? "") : text);
+    output += escapeValue(mergeTagValue(tag, values));
     position = tag.end;
   }
   return output + input.slice(position);

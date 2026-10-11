@@ -26,6 +26,7 @@ import {
   normalizeMessageId,
   withImap,
 } from "./imap";
+import { listReceived } from "./received";
 
 type EnvelopeAddress = { name?: string; address?: string };
 
@@ -374,5 +375,7 @@ export function createInbox(context: ImapSmtpContext): InboxSupport {
       applyActions(context, credentials, ref, actions),
     ensureFolder: (credentials, name) =>
       ensureFolder(context, credentials, name),
+    listReceived: (credentials, input) =>
+      listReceived(context, credentials, input),
   };
 }

@@ -3,7 +3,7 @@ import { TemplateEditorScreen } from "@/features/templates/components/template-e
 import { TemplateUnavailable } from "@/features/templates/components/template-unavailable";
 import {
   getMergeFields,
-  getSourceOptions,
+  getSources,
   getTemplate,
 } from "@/features/templates/queries/templates";
 import { loadAiSettings } from "@/lib/ai-server";
@@ -30,7 +30,7 @@ export default async function TemplateEditorPage({
       getTemplate(id),
       loadBrand(),
       loadAiSettings(),
-      getSourceOptions(),
+      getSources(),
       getMergeFields(),
       getActiveWorkspace(),
       getSession(),

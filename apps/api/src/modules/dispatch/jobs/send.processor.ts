@@ -5,6 +5,7 @@ import {
   toIntegrationError,
 } from "@workspace/integration-core";
 import { DelayedError, type Job, UnrecoverableError } from "bullmq";
+import { TrackingKeys } from "../../../infra/tracking-keys/tracking-keys";
 import {
   SendingSourcesService,
   SourceUnavailableError,
@@ -13,18 +14,43 @@ import {
   type MessageKind,
   SuppressionService,
 } from "../../suppression/suppression.service";
+import type { MessageContent } from "../content-archive";
 import {
+  isBulkKind,
   SEND_QUEUE,
   type SendJob,
   sendsPerSecondFor,
 } from "../dispatch.constants";
-import { DispatchRepository, type MessageRow } from "../dispatch.repository";
+import {
+  DispatchRepository,
+  type MessageContentRow,
+  type MessageRow,
+  type SnapshotRow,
+} from "../dispatch.repository";
+import { MessageEvents } from "../message-events";
+import { prepareContent } from "../prepare-content";
 import { SendRateLimiter } from "../send-rate-limiter";
 
 const maxRateLimitWaits = 200;
+const maxBulkWaitMs = 5 * 60 * 1000;
+const maxCachedSnapshots = 32;
+const dayMs = 24 * 60 * 60 * 1000;
+const limitResetSpreadMs = 60 * 1000;
+
+export function nextDailyLimitReset(now = new Date()) {
+  return (
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) + dayMs
+  );
+}
+
+export function bulkWaitMs(waitMs: number, waits: number) {
+  return Math.min(waitMs * 2 ** Math.min(waits, 9), maxBulkWaitMs);
+}
 
 @Processor(SEND_QUEUE, { concurrency: 10 })
 export class SendProcessor extends WorkerHost {
+  private readonly snapshots = new Map<string, SnapshotRow>();
+
   constructor(
     @Inject(DispatchRepository) private readonly repository: DispatchRepository,
     @Inject(SendingSourcesService)
@@ -32,11 +58,24 @@ export class SendProcessor extends WorkerHost {
     @Inject(SuppressionService)
     private readonly suppression: SuppressionService,
     @Inject(SendRateLimiter) private readonly limiter: SendRateLimiter,
+    @Inject(MessageEvents) private readonly events: MessageEvents,
+    @Inject(TrackingKeys) private readonly trackingKeys: TrackingKeys,
   ) {
     super();
   }
 
   async process(job: Job<SendJob>, token?: string) {
+    const hinted = Boolean(job.data.sourceId && job.data.integrationType);
+    if (job.data.sourceId && job.data.integrationType) {
+      await this.throttle(
+        job,
+        token,
+        job.data.sourceId,
+        job.data.integrationType,
+        isBulkKind(job.data.kind),
+      );
+    }
+
     const createdAt = new Date(job.data.createdAt);
     const message = await this.repository.findMessage(
       job.data.messageId,
@@ -45,8 +84,10 @@ export class SendProcessor extends WorkerHost {
     if (message?.status !== "queued") {
       return { skipped: true };
     }
+    const bulk = isBulkKind(message.kind);
 
-    const content = await this.repository.findContent(message.id, createdAt);
+    const stored = await this.repository.findContent(message.id, createdAt);
+    const content = stored ? await this.prepare(message, stored) : null;
     if (!content) {
       await this.fail(
         message,
@@ -73,12 +114,8 @@ export class SendProcessor extends WorkerHost {
       throw new UnrecoverableError("source_missing");
     }
 
-    const waitMs = await this.limiter.waitMs(
-      source.id,
-      sendsPerSecondFor(source.integrationType),
-    );
-    if (waitMs > 0) {
-      await this.delay(job, token, waitMs);
+    if (!hinted) {
+      await this.throttle(job, token, source.id, source.integrationType, bulk);
     }
 
     try {
@@ -97,28 +134,30 @@ export class SendProcessor extends WorkerHost {
           subject: message.subject,
           html: content.html ?? undefined,
           text: content.text ?? undefined,
-          headers: content.headers ?? undefined,
+          headers: content.headers,
           messageId: message.rfcMessageId ?? undefined,
           idempotencyKey: message.id,
           tags: message.tags ?? undefined,
         },
       );
-      await this.repository.updateMessage(
-        message.id,
-        createdAt,
+      const sentAt = new Date();
+      await this.events.record(
+        { messageId: message.id, type: "sent", occurredAt: sentAt },
         {
-          status: "sent",
-          providerMessageId: result.providerMessageId,
-          attempts: message.attempts + 1,
-          sentAt: new Date(),
-          toEmails: recipients.to,
-          ccEmails: recipients.cc,
-          bccEmails: recipients.bcc,
-          suppressedEmails: recipients.suppressed,
-          errorCode: null,
-          errorMessage: null,
+          internal: true,
+          expectedStatus: ["queued"],
+          patch: {
+            providerMessageId: result.providerMessageId,
+            attempts: message.attempts + 1,
+            sentAt,
+            toEmails: recipients.to,
+            ccEmails: recipients.cc,
+            bccEmails: recipients.bcc,
+            suppressedEmails: recipients.suppressed,
+            errorCode: null,
+            errorMessage: null,
+          },
         },
-        ["queued"],
       );
       return { providerMessageId: result.providerMessageId };
     } catch (error) {
@@ -127,11 +166,24 @@ export class SendProcessor extends WorkerHost {
         throw new UnrecoverableError(error.code);
       }
       const failure = toIntegrationError(error);
+      if (failure.code === "daily_limit_reached" && bulk) {
+        await job.moveToDelayed(
+          nextDailyLimitReset() +
+            Math.floor(Math.random() * limitResetSpreadMs),
+          token,
+        );
+        throw new DelayedError();
+      }
       await this.repository.updateMessage(message.id, createdAt, {
         attempts: message.attempts + 1,
       });
       if (failure.code === "rate_limited") {
-        await this.delay(job, token, (failure.retryAfterSeconds ?? 5) * 1000);
+        await this.delay(
+          job,
+          token,
+          (failure.retryAfterSeconds ?? 5) * 1000,
+          bulk,
+        );
       }
       const lastAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
       if (!failure.retryable || lastAttempt) {
@@ -140,6 +192,49 @@ export class SendProcessor extends WorkerHost {
       }
       throw new IntegrationError(failure.code, failure.message);
     }
+  }
+
+  private async prepare(
+    message: MessageRow,
+    stored: MessageContentRow,
+  ): Promise<MessageContent | null> {
+    const snapshot = stored.snapshotId
+      ? await this.snapshot(message.workspaceId, stored.snapshotId)
+      : null;
+    if (stored.snapshotId && !snapshot) {
+      return null;
+    }
+    return prepareContent({
+      message,
+      content: {
+        html: stored.html,
+        text: stored.text,
+        headers: stored.headers ?? {},
+        snapshotId: stored.snapshotId,
+        variables: stored.variables,
+      },
+      snapshot,
+      keys: this.trackingKeys,
+    });
+  }
+
+  private async snapshot(workspaceId: string, id: string) {
+    const key = `${workspaceId}:${id}`;
+    const cached = this.snapshots.get(key);
+    if (cached) {
+      return cached;
+    }
+    const row = await this.repository.findSnapshot(workspaceId, id);
+    if (row) {
+      if (this.snapshots.size >= maxCachedSnapshots) {
+        const oldest = this.snapshots.keys().next().value;
+        if (oldest !== undefined) {
+          this.snapshots.delete(oldest);
+        }
+      }
+      this.snapshots.set(key, row);
+    }
+    return row;
   }
 
   private async allowedRecipients(message: MessageRow) {
@@ -173,29 +268,51 @@ export class SendProcessor extends WorkerHost {
     return { to, cc: allowed(cc), bcc: allowed(bcc), suppressed };
   }
 
+  private async throttle(
+    job: Job<SendJob>,
+    token: string | undefined,
+    sourceId: string,
+    integrationType: string,
+    bulk: boolean,
+  ) {
+    const waitMs = await this.limiter.waitMs(
+      sourceId,
+      sendsPerSecondFor(integrationType),
+    );
+    if (waitMs > 0) {
+      await this.delay(job, token, waitMs, bulk);
+    }
+  }
+
   private async delay(
     job: Job<SendJob>,
     token: string | undefined,
     ms: number,
+    bulk: boolean,
   ) {
     const waits = typeof job.progress === "number" ? job.progress : 0;
-    if (waits >= maxRateLimitWaits) {
+    if (!bulk && waits >= maxRateLimitWaits) {
       throw new IntegrationError(
         "rate_limited",
         "The sending source stayed rate limited for too long.",
       );
     }
     await job.updateProgress(waits + 1);
-    await job.moveToDelayed(Date.now() + ms, token);
+    await job.moveToDelayed(
+      Date.now() + (bulk ? bulkWaitMs(ms, waits) : ms),
+      token,
+    );
     throw new DelayedError();
   }
 
   private async fail(message: MessageRow, code: string, text: string) {
-    await this.repository.updateMessage(
-      message.id,
-      message.createdAt,
-      { status: "failed", errorCode: code, errorMessage: text.slice(0, 2000) },
-      ["queued"],
+    await this.events.record(
+      { messageId: message.id, type: "failed" },
+      {
+        internal: true,
+        expectedStatus: ["queued"],
+        error: { code, message: text },
+      },
     );
   }
 }
