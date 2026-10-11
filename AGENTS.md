@@ -1,18 +1,19 @@
 # OpenCadence
 
 Open-source (MIT), self-hostable email marketing and outreach platform. In
-scope: newsletters and campaigns, multi-step sequences, inbox warm-up, and
-deliverability tooling. Comparable to listmonk and Mailchimp for newsletters
-and Smartlead for sequences and warm-up.
+scope: newsletters and campaigns, transactional email, multi-step sequences,
+inbox warm-up, and deliverability tooling.
 
 Status: fresh scaffold. No product features exist yet. `README.md` lists what
 is planned; do not describe planned features as shipped.
 
 ## Product principles
 
-- **Bring your own provider.** Sending goes through a provider adapter
-  (Amazon SES, Resend, generic SMTP, more later). Never hard-code a provider
-  into feature code; add or extend an adapter.
+- **Bring your own provider.** Users connect sending sources on one
+  integrations page: mailboxes (Gmail, Outlook, IMAP/SMTP) and providers
+  (Resend and Amazon SES first, then SendGrid and other transactional
+  providers). Every source sits behind the same adapter interface. Never
+  hard-code a provider into feature code; add or extend an adapter.
 - **Self-hosted first.** Every feature must work in a self-hosted install with
   no dependency on a maintainer-run service. A hosted version may come later
   and will run the same code, so avoid single-tenant assumptions: scope data
@@ -23,11 +24,39 @@ is planned; do not describe planned features as shipped.
 - **Credentials are secrets.** Provider keys and mailbox passwords are
   encrypted at rest and never logged or returned by an API.
 
+- **Built for translation.** The interface ships in multiple languages. Never
+  hard-code user-facing strings; route them through the i18n layer.
+
+## Tech stack
+
+Decided. Use these; do not introduce alternatives without asking.
+
+| Area | Choice |
+| --- | --- |
+| Backend API | NestJS (`apps/api`), API docs with Scalar at `/docs` |
+| Database | PostgreSQL |
+| Object storage | S3-compatible (MinIO in local development) |
+| Queues and background jobs | BullMQ on Redis (sends, sequence steps, warm-up, webhooks) |
+| Web app | Next.js with React (`apps/web`) |
+| Styling | Tailwind CSS |
+| Data fetching and server state | TanStack Query |
+| Data tables | TanStack Table (React Table) |
+| AI features | Vercel AI SDK |
+| Sending integrations | Resend and Amazon SES first; then Gmail, Outlook, IMAP/SMTP mailboxes and SendGrid-style providers, all behind the adapter interface |
+| Tooling | Turborepo, Bun, TypeScript, Biome |
+
+Not decided yet, so ask before picking: ORM or query layer and migration
+tool, authentication (must support OIDC single sign-on), the i18n library,
+the email builder/editor, and deployment packaging.
+
 ## Repository
 
 Turborepo monorepo on Bun workspaces (Bun 1.3+, Node 24+).
 
-- `apps/web`: Next.js app
+- `apps/web`: Next.js app (port 3000)
+- `apps/api`: NestJS API on Fastify (port 3001), compiled with SWC. Routes are
+  URI-versioned (`/v1/...`). Root module lives in `src/app/`; tests run on
+  Vitest
 - `packages/ui`: shared React components
 - `packages/typescript-config`: shared tsconfig presets
 - `.agents/skills`: project agent skills (symlinked into `.claude/skills`)
@@ -39,9 +68,24 @@ Turborepo monorepo on Bun workspaces (Bun 1.3+, Node 24+).
 - `bun run lint`: Biome check (lint, format, import order)
 - `bun run format`: Biome check with fixes applied
 - `bun run check-types`: type-check everything
+- `bun run test` / `bun run test:e2e`: unit and end-to-end tests
+
+Local services run from `docker-compose.yml` (`docker compose up -d`):
+PostgreSQL 18, Redis 8, and MinIO for S3-compatible storage. Containers are
+named `opencadence-<service>` and share the `opencadence` network. Ports and
+credentials come from `.env` (see `.env.example`).
+
+A lefthook pre-commit hook runs Biome on staged files and re-stages fixes.
 
 ## Conventions
 
+- Never name or compare against competing email products in the README,
+  docs, UI copy, or commit messages. Describe OpenCadence on its own terms.
+  Sending integrations (Resend, Amazon SES, and so on) are fine to name.
+- No em dashes anywhere: code, docs, commit messages, UI copy, or chat
+  replies. Use a comma, colon, period, or parentheses instead.
+- No code comments unless the user asks for one. Do not add explanatory
+  comments, section headers, or TODOs; make the code and names clear instead.
 - Biome only: 2-space indent, unused imports are errors, imports are sorted.
   No ESLint or Prettier. Run `bun run format` before finishing.
 - Conventional Commits. Use the `caveman-commit` skill to commit.

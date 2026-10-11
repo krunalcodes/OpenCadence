@@ -1,0 +1,68 @@
+name: opencadence
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: opencadence-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opencadence}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opencadence}
+      POSTGRES_DB: ${POSTGRES_DB:-opencadence}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - opencadence
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8.10-alpine
+    container_name: opencadence-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - opencadence
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: opencadence-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-opencadence}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-opencadence}
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - opencadence
+
+volumes:
+  postgres_data:
+    name: opencadence_postgres_data
+  redis_data:
+    name: opencadence_redis_data
+  minio_data:
+    name: opencadence_minio_data
+
+networks:
+  opencadence:
+    name: opencadence
+    driver: bridge

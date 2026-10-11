@@ -1,40 +1,58 @@
 # OpenCadence
 
-Open-source, self-hostable email marketing and outreach. Build newsletters, run
-automated sequences, warm up inboxes, and send through the email provider you
-already pay for.
+**Send newsletters and outreach sequences from your own server, through the
+email accounts and providers you already use.**
 
-Think listmonk or Mailchimp for newsletters and Smartlead for sequences and
-warm-up, in one MIT-licensed app you run yourself.
+OpenCadence is open-source email marketing and outreach software that you host
+yourself. Build newsletters, run multi-step sequences, and warm up inboxes in
+one app, under the MIT license.
 
 > **Status: early development.** The repository is a fresh scaffold. Nothing
-> below is usable yet; the feature list describes what is being built, not what
-> ships today. Star or watch the repo to follow along.
+> below is usable yet. The feature list describes what is being built, so star
+> or watch the repo to follow along.
 
-## Why
+## Why OpenCadence
 
-Email tools tend to bundle three things: the software, the sending
-infrastructure, and a per-contact price. OpenCadence only wants to be the
-software.
+Most email tools charge per contact and send through their own infrastructure.
+Your bill grows with your list, and your sender reputation sits on servers you
+do not control.
 
-- **Bring your own provider.** Connect Amazon SES, Resend, or any SMTP server.
-  You keep your sending reputation, your provider pricing, and the option to
-  switch.
-- **Own your data.** Contacts, content, and engagement history live in your
-  database, on your infrastructure.
-- **One tool for both jobs.** Opt-in newsletters and one-to-one sequences
-  share contacts, suppression lists, and analytics instead of living in two
-  products.
+OpenCadence is only the software. You bring the sending and keep the data.
+
+- **Send with what you already have.** Connect Gmail, Outlook, or IMAP/SMTP
+  mailboxes, or providers such as Resend, Amazon SES, and SendGrid. You pay
+  your provider's rate and your sender reputation stays yours.
+- **Keep your data on your servers.** Contacts, content, and engagement
+  history live in your own PostgreSQL database.
+- **Run newsletters and outreach from one contact list.** Someone who
+  unsubscribes from a newsletter is suppressed in your sequences too, and one
+  set of reports covers both.
+- **Grow your list without growing your bill.** The software is free under the
+  MIT license at any list size.
 
 ## Planned features
 
 ### Newsletters and campaigns
 
 - Email builder with reusable templates and a plain HTML/Markdown escape hatch
-- Lists, tags, and segments
+- AI writing assistant to draft, rewrite, and personalize emails and subject
+  lines, using your own model key
+- Media library for images and attachments, kept in S3-compatible storage
+- Lists, tags, and segments, including advanced segments built from query
+  expressions on any contact field
+- Custom contact fields and merge tags with fallbacks, plus spintax for
+  outreach copy
 - Subscription forms, double opt-in, and a preference centre
 - Scheduling, send-time throttling, and A/B tests
+- Campaign attachments
+- Public archive of sent newsletters, with an RSS feed
 - Open, click, bounce, complaint, and unsubscribe tracking
+
+### Transactional email
+
+- API to send one-off emails from your own app, such as receipts and password
+  resets
+- Stored templates with variables, sent through any connected integration
 
 ### Sequences
 
@@ -48,34 +66,78 @@ software.
 - Inbox warm-up with gradual volume ramp
 - SPF, DKIM, and DMARC checks for sending domains
 - Bounce and complaint handling, with automatic suppression
+- Custom tracking domains for open, click, and unsubscribe links
 - Per-provider and per-domain rate limits
 
-### Providers
+### Sending integrations
 
-- Amazon SES
-- Resend
-- Generic SMTP
-- A small adapter interface so new providers are a single package
+Connect every mailbox and provider you send from on one integrations page,
+then use any mix of them across campaigns and sequences.
+
+- Mailboxes: Gmail, Outlook, and any IMAP/SMTP account (needed for sequences,
+  warm-up, and reply detection)
+- Email providers: Resend and Amazon SES first, then SendGrid and other
+  transactional providers
+- Generic SMTP for anything else
+- A small adapter interface so a new integration is a single package
+- Custom channel webhooks, so campaigns can also go out over SMS, WhatsApp,
+  or any service with an HTTP endpoint
+
+### Compliance
+
+- Consent records per contact
+- Data export and erasure requests
+- One-click `List-Unsubscribe` headers
 
 ### Platform
 
 - Self-host with Docker
 - Workspaces, team members, and roles
-- REST API and webhooks
-- Import from CSV and from other tools
+- Single sign-on (OIDC) and two-factor authentication
+- Multi-language interface, with translations for the app and the public
+  subscription pages
+- REST API with scoped API keys per workspace, and webhooks
+- Audit log of who changed or sent what
+- Overview dashboard, per-campaign and per-sequence reports, deliverability
+  trends, and CSV export
+- Import from CSV and from other tools, and export contacts to CSV
+- Customizable public pages for subscribe, unsubscribe, and preferences
+
+### Later
+
+- Inbound integrations: Zapier, n8n, and Make connectors, inbound webhooks,
+  and CRM sync
 
 ## Self-hosted and hosted
 
-The self-hosted version is the product, and stays MIT-licensed with every
+The self-hosted version is the product. It stays MIT-licensed with every
 feature included. A hosted version run by the maintainers may follow for teams
-that would rather not operate it themselves. It will run the same code.
+that would rather not operate servers, and it will run the same code.
 
 ## Responsible sending
 
-OpenCadence is a sending tool, and you are responsible for how you use it.
-Follow the laws that apply to you (CAN-SPAM, GDPR, CASL, and others) and your
-email provider's acceptable use policy. Unsubscribe handling and suppression
-lists are built in and cannot be turned off.
+You are responsible for what you send with OpenCadence. Follow the laws that
+apply to you (CAN-SPAM, GDPR, CASL, and others) and your email provider's
+acceptable use policy. Unsubscribe handling and suppression lists are built in
+and cannot be turned off.
+
+## Tech stack
+
+| Area                       | Choice                                         |
+| -------------------------- | ---------------------------------------------- |
+| Backend API                | [NestJS](https://nestjs.com)                   |
+| Database                   | [PostgreSQL](https://www.postgresql.org)       |
+| Queues and background jobs | [BullMQ](https://bullmq.io) on Redis           |
+| Web app                    | [Next.js](https://nextjs.org) and React        |
+| Styling                    | [Tailwind CSS](https://tailwindcss.com)        |
+| Data fetching              | [TanStack Query](https://tanstack.com/query)   |
+| Data tables                | [TanStack Table](https://tanstack.com/table)   |
+| AI features                | [Vercel AI SDK](https://ai-sdk.dev)            |
+| Sending integrations       | Resend and Amazon SES first, then mailboxes    |
+| Tooling                    | Turborepo, Bun, TypeScript, Biome              |
+
+Only the web and API scaffolds exist so far; the database and queue layers
+are still to be added.
 
 ## Development
 
@@ -83,10 +145,17 @@ Requirements: [Bun](https://bun.sh) 1.3+ and Node.js 24+.
 
 ```sh
 bun install
+docker compose up -d
 bun run dev
 ```
 
-The web app runs at http://localhost:3000.
+`docker compose up -d` starts the local services: PostgreSQL 18 on port 5432,
+Redis 8 on 6379, and MinIO (S3-compatible storage) on 9000 with its console on
+9001. Default credentials are `opencadence` / `opencadence`. To change ports or
+credentials, copy `.env.example` to `.env` and edit it.
+
+The web app runs at http://localhost:3000 and the API at
+http://localhost:3001/v1, with API docs at http://localhost:3001/docs.
 
 | Command               | What it does                               |
 | --------------------- | ------------------------------------------ |
@@ -95,12 +164,15 @@ The web app runs at http://localhost:3000.
 | `bun run lint`        | Lint and check formatting with Biome       |
 | `bun run format`      | Fix formatting, lint, and import order     |
 | `bun run check-types` | Type-check every app and package           |
+| `bun run test`        | Run unit tests                             |
+| `bun run test:e2e`    | Run end-to-end tests                       |
 
 ### Repository layout
 
 This is a [Turborepo](https://turborepo.dev) monorepo using Bun workspaces.
 
 - `apps/web`: the [Next.js](https://nextjs.org) application
+- `apps/api`: the [NestJS](https://nestjs.com) API
 - `packages/ui`: shared React components
 - `packages/typescript-config`: shared `tsconfig.json` presets
 
