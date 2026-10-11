@@ -4,8 +4,13 @@ Open-source (MIT), self-hostable email marketing and outreach platform. In
 scope: newsletters and campaigns, transactional email, multi-step sequences,
 inbox warm-up, and deliverability tooling.
 
-Status: fresh scaffold. No product features exist yet. `README.md` lists what
-is planned; do not describe planned features as shipped.
+Status: early. The API and the product app are scaffolds; the marketing site
+is built. `README.md` lists what is planned. In the README, docs, and product
+UI, do not describe planned features as shipped. The marketing site is the
+one exception: by the owner's decision it describes every feature as
+available and sells the hosted version (see `DESIGN.md`, Marketing site). It
+still must not invent customers, testimonials, numbers, or prices beyond the
+placeholders in `apps/web/features/marketing/lib/pricing.ts`.
 
 ## Product principles
 
@@ -39,8 +44,9 @@ the `impeccable` skill for it.
 - Follow the control rules in `DESIGN.md` under "Choosing the right control",
   for example a searchable combobox in place of a plain select.
 - Inter is the only typeface.
-- The design is approved from a mock only. Do not build screens from it
-  until asked.
+- The product design is approved from a mock only. Do not build product
+  screens from it until asked. The marketing site is built and uses the Island
+  treatment described in `DESIGN.md`.
 
 ## Tech stack
 
@@ -67,6 +73,10 @@ tool, authentication (must support OIDC single sign-on), the i18n library,
 the email builder/editor, and deployment packaging.
 
 ## Repository
+
+`ARCHITECTURE.md` is the target folder structure and the rules for where new
+code goes. Read it before adding a module, feature, package, or integration,
+and follow its naming. Do not create folders ahead of the first file.
 
 Turborepo monorepo on Bun workspaces (Bun 1.3+, Node 24+).
 

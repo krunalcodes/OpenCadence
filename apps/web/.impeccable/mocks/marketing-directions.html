@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenCadence · header, hero and footer directions</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FBFCFA;--ink:#14201B;--ink2:#56635C;--ink3:#85918A;--line:#E3E7E0;--brand:#0F5C4D;--brandh:#0B4A3E;--lime:#C8F169;--limeink:#1F3B08;--night:#07130F;--night2:#0D1F19}
+*{box-sizing:border-box;margin:0}
+body{font-family:Inter,system-ui,sans-serif;color:var(--ink);background:#E9EDE6;-webkit-font-smoothing:antialiased;font-feature-settings:"salt","calt"}
+a{color:inherit;text-decoration:none}
+.mono{font-family:"JetBrains Mono",monospace}
+.tag{position:sticky;top:0;z-index:50;background:#14201B;color:#fff;font-size:13px;padding:8px 20px;display:flex;gap:14px;align-items:center}
+.tag b{background:var(--lime);color:var(--limeink);border-radius:6px;padding:1px 8px}
+.v{position:relative;overflow:hidden;margin-bottom:28px}
+.mark{width:26px;height:26px;border-radius:8px;background:var(--brand);display:grid;place-items:center;flex:none}
+.mark svg{width:15px;height:15px;stroke:var(--lime);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:10px;font-weight:500;font-size:14px}
+.pri{background:var(--brand);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 1px 2px rgba(11,74,62,.4)}
+.sec{background:#fff;border:1px solid var(--line);box-shadow:0 1px 2px rgba(20,32,27,.05)}
+.shot{border-radius:14px;overflow:hidden;background:#fff}
+.shot iframe{width:1440px;height:900px;border:0;transform-origin:0 0;display:block;pointer-events:none}
+.gh{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:500}
+.gh i{font-style:normal;font-size:12px;padding:1px 7px;border-radius:99px}
+
+/* ───── A · Island ───── */
+.a{background:var(--bg);background-image:radial-gradient(#D5DDD1 1px,transparent 1px);background-size:22px 22px}
+.a::before{content:"";position:absolute;inset:0;background:radial-gradient(900px 480px at 50% 0,rgba(200,241,105,.35),transparent 70%),linear-gradient(180deg,transparent 55%,var(--bg) 92%)}
+.a nav{position:relative;z-index:2;margin:18px auto 0;width:max-content;display:flex;align-items:center;gap:6px;padding:6px 6px 6px 14px;border-radius:999px;background:rgba(255,255,255,.72);backdrop-filter:blur(14px) saturate(1.5);border:1px solid rgba(20,32,27,.08);box-shadow:0 8px 30px -12px rgba(20,32,27,.25),0 1px 0 rgba(255,255,255,.8) inset}
+.a nav .l{padding:7px 12px;border-radius:99px;font-size:14px;color:var(--ink2);font-weight:500}
+.a nav .l:hover{background:rgba(20,32,27,.06);color:var(--ink)}
+.a nav .sep{width:1px;height:18px;background:var(--line);margin:0 6px}
+.a nav .btn{height:34px;border-radius:99px;padding:0 14px}
+.a .hero{position:relative;z-index:1;text-align:center;padding:84px 24px 0}
+.chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:500;padding:5px 12px 5px 6px;border-radius:99px;background:#fff;border:1px solid var(--line);box-shadow:0 1px 2px rgba(20,32,27,.05)}
+.chip b{background:var(--lime);color:var(--limeink);border-radius:99px;padding:1px 8px;font-size:12px}
+.a h1{font-size:84px;line-height:.98;letter-spacing:-.045em;font-weight:600;max-width:980px;margin:26px auto 0;text-wrap:balance}
+.a h1 em{font-style:normal;color:var(--brand)}
+.a .sub{font-size:19px;line-height:1.5;color:var(--ink2);max-width:600px;margin:22px auto 0;text-wrap:pretty}
+.a .cta{display:flex;gap:10px;justify-content:center;margin-top:30px}
+.a .cta .btn{height:46px;padding:0 22px;border-radius:99px;font-size:15px}
+.a .stage{perspective:2200px;margin:64px auto 0;width:1180px;max-width:calc(100% - 48px)}
+.a .shot{transform:rotateX(14deg) scale(.98);transform-origin:50% 0;box-shadow:0 60px 120px -40px rgba(11,74,62,.45),0 0 0 1px rgba(20,32,27,.08);height:560px;-webkit-mask:linear-gradient(180deg,#000 55%,transparent);mask:linear-gradient(180deg,#000 55%,transparent)}
+.a .shot iframe{transform:scale(.8195)}
+.a footer{position:relative;z-index:1;background:var(--bg);padding:70px 56px 0;overflow:hidden}
+.a .fg{display:grid;grid-template-columns:1.6fr repeat(3,1fr);gap:40px;max-width:1180px;margin:0 auto}
+.fg h6{font-size:13px;color:var(--ink3);font-weight:500;margin-bottom:12px}
+.fg a{display:block;font-size:14.5px;padding:4px 0;color:var(--ink2)}
+.fg p{font-size:14.5px;color:var(--ink2);max-width:280px;margin-top:12px;line-height:1.5}
+.word{font-size:15.6vw;font-weight:600;letter-spacing:-.06em;line-height:.74;text-align:center;margin-top:56px;background:linear-gradient(180deg,#0F5C4D 10%,rgba(15,92,77,.08) 88%);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap;transform:translateY(8%)}
+
+/* ───── B · Blueprint ───── */
+.b{background:var(--bg)}
+.rails{max-width:1240px;margin:0 auto;border-left:1px solid var(--line);border-right:1px solid var(--line);position:relative}
+.row{border-bottom:1px solid var(--line);position:relative}
+.row::before,.row::after{content:"+";position:absolute;bottom:-9px;font:400 15px/1 "JetBrains Mono",monospace;color:#9AA79F;background:var(--bg);width:11px;text-align:center}
+.row::before{left:-6px}.row::after{right:-6px}
+.b nav{display:flex;align-items:center;height:60px;padding:0 24px;gap:28px;font-size:14px}
+.b nav .brand{display:flex;gap:10px;align-items:center;font-weight:600;font-size:15px}
+.b nav .l{color:var(--ink2);font-weight:500}
+.b nav .r{margin-left:auto;display:flex;align-items:center;gap:18px}
+.b .gh i{background:#EEF1EB;color:var(--ink2)}
+.b .hero{display:grid;grid-template-columns:1.05fr 1fr}
+.b .hl{padding:72px 40px 56px 40px;border-right:1px solid var(--line)}
+.lab{font:500 12px/1 "JetBrains Mono",monospace;color:var(--brand);letter-spacing:.02em;display:flex;gap:8px;align-items:center}
+.lab::before{content:"";width:7px;height:7px;background:var(--lime);border:1px solid var(--brand)}
+.b h1{font-size:64px;line-height:1.02;letter-spacing:-.04em;font-weight:600;margin-top:22px;text-wrap:balance}
+.b .sub{font-size:17.5px;line-height:1.55;color:var(--ink2);margin-top:20px;max-width:470px}
+.b .cta{display:flex;gap:10px;margin-top:30px}
+.b .btn{border-radius:8px;height:42px}
+.cmd{margin-top:34px;display:flex;align-items:center;gap:12px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:10px 14px;font:13px "JetBrains Mono",monospace;width:max-content;max-width:100%}
+.cmd span{color:var(--ink3)}
+.b .hr{background:repeating-linear-gradient(135deg,transparent 0 9px,rgba(15,92,77,.05) 9px 10px);padding:40px 0 0 40px;overflow:hidden}
+.b .shot{border-radius:12px 0 0 0;height:500px;width:900px;box-shadow:0 0 0 1px var(--line),-20px 30px 60px -30px rgba(20,32,27,.25)}
+.b .shot iframe{transform:scale(.72)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr)}
+.stats div{padding:22px 24px;border-right:1px solid var(--line)}
+.stats div:last-child{border:0}
+.stats b{display:block;font-size:15px;font-weight:600}
+.stats span{font-size:13.5px;color:var(--ink2)}
+.b footer .cols{display:grid;grid-template-columns:1.4fr repeat(4,1fr)}
+.b footer .cols>div{padding:32px 24px;border-right:1px solid var(--line)}
+.b footer .cols>div:last-child{border:0}
+.b footer .bot{display:flex;justify-content:space-between;padding:16px 24px;font:12px "JetBrains Mono",monospace;color:var(--ink3)}
+.b footer .bot i{font-style:normal;color:var(--brand)}
+
+/* ───── C · Night ───── */
+.c{background:var(--night);color:#E8F1EC}
+.c::before{content:"";position:absolute;inset:0;background:radial-gradient(700px 380px at 50% 30%,rgba(200,241,105,.16),transparent 70%),radial-gradient(900px 500px at 50% 62%,rgba(15,92,77,.55),transparent 70%)}
+.c::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:64px 64px;-webkit-mask:radial-gradient(60% 55% at 50% 30%,#000,transparent);mask:radial-gradient(60% 55% at 50% 30%,#000,transparent)}
+.c>*{position:relative;z-index:1}
+.c nav{display:flex;align-items:center;max-width:1180px;margin:0 auto;height:68px;padding:0 24px;gap:30px;font-size:14px}
+.c nav .brand{display:flex;gap:10px;align-items:center;font-weight:600;font-size:15px;color:#fff}
+.c nav .l{color:#9DB3A9;font-weight:500}
+.c nav .r{margin-left:auto;display:flex;align-items:center;gap:16px}
+.c .gh{color:#C9D8D0}.c .gh i{background:rgba(255,255,255,.08);color:#C9D8D0}
+.c .lime{background:var(--lime);color:var(--limeink);height:36px;border-radius:9px;font-weight:600}
+.c .hero{text-align:center;padding:76px 24px 0}
+.c .chip{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#D6E4DC;box-shadow:none}
+.c h1{font-size:78px;line-height:1;letter-spacing:-.045em;font-weight:600;max-width:940px;margin:26px auto 0;color:#fff;text-wrap:balance}
+.c h1 em{font-style:normal;color:var(--lime)}
+.c .sub{font-size:18.5px;line-height:1.5;color:#9DB3A9;max-width:580px;margin:22px auto 0}
+.c .cta{display:flex;gap:10px;justify-content:center;margin-top:30px}
+.c .cta .btn{height:46px;padding:0 22px;font-size:15px}
+.c .ghost{border:1px solid rgba(255,255,255,.18);color:#fff}
+.c .stage{margin:64px auto 0;width:1120px;max-width:calc(100% - 48px);padding:8px 8px 0;border-radius:20px 20px 0 0;background:linear-gradient(180deg,rgba(200,241,105,.35),rgba(255,255,255,.04));box-shadow:0 -30px 120px -20px rgba(200,241,105,.22)}
+.c .shot{border-radius:13px 13px 0 0;height:520px}
+.c .shot iframe{transform:scale(.7667)}
+.c footer{background:var(--night);border-top:1px solid rgba(255,255,255,.08);padding:64px 24px 28px}
+.c .big{max-width:1180px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-end;gap:40px;padding-bottom:48px;border-bottom:1px solid rgba(255,255,255,.08)}
+.c .big h2{font-size:52px;line-height:1.02;letter-spacing:-.04em;font-weight:600;color:#fff;max-width:620px}
+.c .fg{max-width:1180px;margin:44px auto 0;display:grid;grid-template-columns:1.6fr repeat(3,1fr);gap:40px}
+.c .fg h6{color:#6F877C}.c .fg a,.c .fg p{color:#B4C6BD}
+.c .bot{max-width:1180px;margin:44px auto 0;display:flex;justify-content:space-between;font-size:13px;color:#6F877C}
+.c .live{display:inline-flex;gap:8px;align-items:center}
+.c .live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--lime);box-shadow:0 0 0 4px rgba(200,241,105,.2)}
+</style></head><body>
+
+<div class="tag"><b>A</b> Island: floating pill navigation, centred oversized headline, tilted product shot, giant wordmark footer</div>
+<section class="v a">
+  <nav><span class="mark"><svg viewBox="0 0 24 24"><path d="M3 12h3l3-8 4 16 3-8h5"/></svg></span><b style="margin:0 10px 0 4px;font-size:15px">OpenCadence</b>
+    <a class="l">Product</a><a class="l">Pricing</a><a class="l">Docs</a><a class="l">Changelog</a><span class="sep"></span><a class="l">Sign in</a><a class="btn pri">Start free</a></nav>
+  <div class="hero">
+    <span class="chip"><b>New</b> Inbox warm-up now ramps per mailbox</span>
+    <h1>Every email you send, on <em>one cadence.</em></h1>
+    <p class="sub">Newsletters, outreach sequences, transactional email and inbox warm-up in one place, sent through the mailboxes and providers you already use.</p>
+    <div class="cta"><a class="btn pri">Start for free</a><a class="btn sec">Book a demo</a></div>
+    <div class="stage"><div class="shot"><iframe src="app.html" title="Product preview" tabindex="-1"></iframe></div></div>
+  </div>
+  <footer><div class="fg">
+      <div><div style="display:flex;gap:10px;align-items:center;font-weight:600"><span class="mark"><svg viewBox="0 0 24 24"><path d="M3 12h3l3-8 4 16 3-8h5"/></svg></span>OpenCadence</div><p>Email marketing and outreach on your own providers.</p></div>
+      <div><h6>Product</h6><a>Newsletters</a><a>Sequences</a><a>Deliverability</a><a>Integrations</a></div>
+      <div><h6>Developers</h6><a>Docs</a><a>API reference</a><a>Self-hosting</a><a>Changelog</a></div>
+      <div><h6>Company</h6><a>Pricing</a><a>Contact</a><a>Security</a><a>Open source</a></div></div>
+    <div class="word">OpenCadence</div></footer>
+</section>
+
+<div class="tag"><b>B</b> Blueprint: page framed by hairline rails with corner marks, split hero, mono details, footer as a ruled grid</div>
+<section class="v b"><div class="rails">
+  <div class="row"><nav><span class="brand"><span class="mark"><svg viewBox="0 0 24 24"><path d="M3 12h3l3-8 4 16 3-8h5"/></svg></span>OpenCadence</span>
+    <a class="l">Product</a><a class="l">Pricing</a><a class="l">Docs</a><a class="l">Changelog</a>
+    <div class="r"><a class="l">Contact</a><a class="l">Sign in</a><a class="btn pri" style="height:36px">Start free</a></div></nav></div>
+  <div class="row hero">
+    <div class="hl"><span class="lab">Newsletters · Sequences · Warm-up</span>
+      <h1>Newsletters and outreach, sent through your own providers.</h1>
+      <p class="sub">OpenCadence runs your newsletters, sequences and warm-up in one app. Connect Gmail, Outlook, Resend or Amazon SES and keep your own sender reputation.</p>
+      <div class="cta"><a class="btn pri">Start for free</a><a class="btn sec">Book a demo</a></div>
+      <div class="cmd"><span>Open source.</span> Prefer to self-host? <span>→</span></div></div>
+    <div class="hr"><div class="shot"><iframe src="app.html" title="Product preview" tabindex="-1"></iframe></div></div>
+  </div>
+  <div class="row stats"><div><b>Bring your own sending</b><span>Gmail, Outlook, SMTP, Resend, SES</span></div><div><b>One contact list</b><span>Newsletters and outreach together</span></div><div><b>Deliverability built in</b><span>Warm-up, DNS checks, health</span></div><div><b>No per-contact pricing</b><span>Grow the list, not the bill</span></div></div>
+  <div style="height:70px" class="row"></div>
+  <footer><div class="row cols fg" style="display:grid;gap:0;max-width:none">
+      <div><div style="display:flex;gap:10px;align-items:center;font-weight:600"><span class="mark"><svg viewBox="0 0 24 24"><path d="M3 12h3l3-8 4 16 3-8h5"/></svg></span>OpenCadence</div><p>Email marketing and outreach on your own providers.</p></div>
+      <div><h6>Product</h6><a>Newsletters</a><a>Sequences</a><a>Deliverability</a><a>Integrations</a></div>
+      <div><h6>Developers</h6><a>Docs</a><a>API reference</a><a>Self-hosting</a></div>
+      <div><h6>Company</h6><a>Pricing</a><a>Contact</a><a>Security</a></div>
+      <div><h6>Open source</h6><a>GitHub</a><a>Self-hosting</a></div></div>
+    <div class="bot"><span>© 2026 OpenCadence</span><span><i>●</i> all systems normal</span></div></footer>
+</div></section>
+
+<div class="tag"><b>C</b> Night: dark hero with lime glow and grid, lime call to action, framed product shot, statement footer</div>
+<section class="v c">
+  <nav><span class="brand"><span class="mark"><svg viewBox="0 0 24 24"><path d="M3 12h3l3-8 4 16 3-8h5"/></svg></span>OpenCadence</span>
+    <a class="l">Product</a><a class="l">Pricing</a><a class="l">Docs</a><a class="l">Changelog</a>
+    <div class="r"><a class="l">Contact</a><a class="l">Sign in</a><a class="btn lime">Start free</a></div></nav>
+  <div class="hero">
+    <span class="chip"><b>New</b> Inbox warm-up now ramps per mailbox</span>
+    <h1>One place for every email <em>you send.</em></h1>
+    <p class="sub">Newsletters, outreach sequences, transactional email and warm-up in one app that sends through the mailboxes and providers you already use.</p>
+    <div class="cta"><a class="btn lime">Start for free</a><a class="btn ghost">Book a demo</a></div>
+    <div class="stage"><div class="shot"><iframe src="app.html" title="Product preview" tabindex="-1"></iframe></div></div>
+  </div>
+  <footer><div class="big"><h2>Send your next campaign today.</h2><div style="display:flex;gap:10px"><a class="btn lime" style="height:46px;padding:0 22px">Start for free</a><a class="btn ghost" style="height:46px;padding:0 22px">Book a demo</a></div></div>
+    <div class="fg"><div><div style="display:flex;gap:10px;align-items:center;font-weight:600;color:#fff"><span class="mark"><svg viewBox="0 0 24 24"><path d="M3 12h3l3-8 4 16 3-8h5"/></svg></span>OpenCadence</div><p>Email marketing and outreach on your own providers.</p></div>
+      <div><h6>Product</h6><a>Newsletters</a><a>Sequences</a><a>Deliverability</a><a>Integrations</a></div>
+      <div><h6>Developers</h6><a>Docs</a><a>API reference</a><a>Self-hosting</a><a>Changelog</a></div>
+      <div><h6>Company</h6><a>Pricing</a><a>Contact</a><a>Security</a><a>Open source</a></div></div>
+    <div class="bot"><span>© 2026 OpenCadence</span><span class="live">Open source on GitHub</span></div></footer>
+</section>
+</body></html>

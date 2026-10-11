@@ -327,6 +327,29 @@ Fourteen small vertical bars, one per day, coloured by that day's status
 (healthy, warning, failing, no data). Shown beside every mailbox, provider,
 and sending domain, always next to a status badge.
 
+## Marketing site
+
+The marketing site (everything under `apps/web/app/(marketing)`) uses the same
+light palette and Inter type as the product, in a treatment called Island.
+
+- Header is a floating pill: fixed near the top, centred, translucent white
+  with blur, holding the brand, a Product mega menu, Pricing, Blog, Contact,
+  Sign in, and a "Start free" button.
+- The home hero sits on a dot-grid ground with a soft lime glow: a centred,
+  oversized headline with a few words in evergreen, pill-shaped buttons, and
+  the product screen tilted back and fading out.
+- Content sections are light, separated by hairlines, with product visuals in
+  the normal product look.
+- The closing call to action is a rounded evergreen panel with lime buttons,
+  the one dark element on the page.
+- The footer is light and ends in a giant "OpenCadence" wordmark in an
+  evergreen gradient, cropped by the bottom edge.
+- The glow, dot grid, hatch fills, gradient wordmark, and a small monospace
+  label above inner-page titles are allowed on the marketing site only.
+- Helper classes live in `app/(marketing)/marketing.css`.
+- The site sells the hosted product. Calls to action are "Start for free" and
+  "Book a demo". Open source is mentioned at most once per page.
+
 ## Do's and Don'ts
 
 ### Do:

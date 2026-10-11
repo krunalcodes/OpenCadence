@@ -169,6 +169,9 @@ http://localhost:3001/v1, with API docs at http://localhost:3001/docs.
 
 ### Repository layout
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full target structure and the
+rules for where new code goes.
+
 This is a [Turborepo](https://turborepo.dev) monorepo using Bun workspaces.
 
 - `apps/web`: the [Next.js](https://nextjs.org) application

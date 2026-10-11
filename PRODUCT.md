@@ -51,8 +51,10 @@ list size.
 
 ## Capabilities and Constraints
 
-- Planned capabilities are listed in `README.md`. None are built yet; the
-  repository is a scaffold. Never present a planned feature as shipped.
+- Planned capabilities are listed in `README.md`. The product itself is not
+  built yet. Do not present a planned feature as shipped in the README, docs,
+  or product UI. The marketing site is the exception by the owner's decision:
+  it describes every feature as available and sells the hosted version.
 - Stack: Next.js and React, Tailwind CSS, shadcn/ui components on Base UI
   primitives, TanStack Query, TanStack Table. API in NestJS.
 - The interface ships in multiple languages. No user-facing string is
